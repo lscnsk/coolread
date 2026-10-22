@@ -20,10 +20,12 @@ export async function drawCover(title: string, author: string, scale = 1): Promi
     const paper = '#f5efe3', ink = '#2a2420';
     g.fillStyle = paper; g.fillRect(0, 0, W, H);
     g.strokeStyle = ink;
-    g.lineWidth = 4.5; g.strokeRect(48, 48, W - 96, H - 96);
-    g.lineWidth = 1.6; g.strokeRect(72, 72, W - 144, H - 144);
+    // Two frames set in from the edge, a wide margin of paper around them
+    const outer = 84, inner = 114;
+    g.lineWidth = 9; g.strokeRect(outer, outer, W - 2 * outer, H - 2 * outer);
+    g.lineWidth = 3.2; g.strokeRect(inner, inner, W - 2 * inner, H - 2 * inner);
 
-    const maxW = W - 148 - 120;
+    const maxW = W - 2 * inner - 100;
     g.fillStyle = ink; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
     const words = title.toUpperCase().split(/\s+/).filter(Boolean);
     const wrap = (size: number) => {
@@ -41,17 +43,20 @@ export async function drawCover(title: string, author: string, scale = 1): Promi
     let size = 92, lines = wrap(size);
     while (size > 38 && (lines.length > 6 || lines.some(l => g.measureText(l).width > maxW))) { size -= 4; lines = wrap(size); }
     const lh = size * 1.18;
-    let y = 74 + 190 + size;
+    let y = inner + 160 + size;
     for (const l of lines) { g.fillText(l, W / 2, y, maxW); y += lh; }
 
     // A short rule under the title
     g.lineWidth = 2; g.beginPath(); g.moveTo(W / 2 - 60, y - lh + size * 0.55 + 34); g.lineTo(W / 2 + 60, y - lh + size * 0.55 + 34); g.stroke();
 
-    g.font = `400 44px ${serif}`;
+    // A long name gets a smaller size first, and is cut only if that is not enough
+    let authorSize = 44;
+    g.font = `400 ${authorSize}px ${serif}`;
+    while (authorSize > 32 && g.measureText(author).width > maxW) { authorSize -= 2; g.font = `400 ${authorSize}px ${serif}`; }
     let a = author;
     while (a.length > 3 && g.measureText(a).width > maxW) a = a.slice(0, -2);
     if (a !== author) a = a.trim() + '…';
-    g.fillText(a, W / 2, H - 74 - 150, maxW);
+    g.fillText(a, W / 2, H - inner - 120, maxW);
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
     return { base64: dataUrl.split(',')[1], type: 'image/jpeg' };
