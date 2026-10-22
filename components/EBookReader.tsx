@@ -4832,7 +4832,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                         ref={contentRef}
                         lang="ru"
                         onClick={handleContentInteract}
-                        className={`reader-content ${isCoverPage && !isPagedMode ? 'cover-scroll' : ''} ${fontSize > 0.9 ? 'reader-large-font' : ''} ${isNotesPage ? 'is-notes-chapter' : ''} prose ${theme === 'light' ? 'prose-stone' : 'prose-invert'} prose-lg max-w-none [&>img]:mx-auto [&>img]:max-w-full [&>img]:h-auto [&>img]:block`}
+                        className={`reader-content ${fontSize > 0.9 ? 'reader-large-font' : ''} ${isNotesPage ? 'is-notes-chapter' : ''} prose ${theme === 'light' ? 'prose-stone' : 'prose-invert'} prose-lg max-w-none [&>img]:mx-auto [&>img]:max-w-full [&>img]:h-auto [&>img]:block`}
                         style={{
                             fontSize: isCoverPage ? '1rem' : (isNotesPage ? '0.95rem' : `${fontSize}rem`),
                             lineHeight: isCoverPage ? '1.4' : (isNotesPage ? '1.55' : '1.6'),
