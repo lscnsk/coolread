@@ -65,7 +65,6 @@ const PRESET_SOURCES: OpdsSource[] = String(import.meta.env.VITE_OPDS_PRESET || 
 // Added once; the user can delete them.
 const BOOK_SITES: OpdsSource[] = [
   { id: 'web_preset_azlib', title: 'az.lib.ru', url: 'coolread-web:azlib' },
-  { id: 'web_preset_wikisource', title: 'wikisource', url: 'coolread-web:wikisource' },
 ];
 const BOOK_SITES_KEY = 'cool_read_book_catalogs_added';
 // An earlier test build added the two sites as web pages for the browser
@@ -90,7 +89,11 @@ export async function loadOpdsSources(): Promise<OpdsSource[]> {
     const raw = isNative ? (await Preferences.get({ key: STORAGE_KEY })).value : localStorage.getItem(STORAGE_KEY);
     if (raw === null || raw === undefined) return await addBookSitesOnce(PRESET_SOURCES);
     // Older builds named the preset Flibusta in Russian
-    const sources = (JSON.parse(raw) as OpdsSource[]).map(s => (s.id === FLIBUSTA_SOURCE.id ? { ...s, title: FLIBUSTA_SOURCE.title } : s));
+    const parsed = JSON.parse(raw) as OpdsSource[];
+    // Wikisource search is switched off for now: drop the catalog an earlier 1.93 build added
+    const withoutWiki = parsed.filter(s => s.url !== 'coolread-web:wikisource');
+    if (withoutWiki.length !== parsed.length) await saveOpdsSources(withoutWiki);
+    const sources = withoutWiki.map(s => (s.id === FLIBUSTA_SOURCE.id ? { ...s, title: FLIBUSTA_SOURCE.title } : s));
     return await addBookSitesOnce(sources);
   } catch {
     return [];
