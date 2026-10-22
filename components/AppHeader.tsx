@@ -41,7 +41,7 @@ export function AppHeader({
 
   return (
     <div
-      className={`bimbo-header bimbo-panel absolute top-0 left-0 right-0 h-20 bg-[#23211f]/95 border-b border-[#45413e] px-4 z-30 transition-transform duration-300 shadow-[0_5px_15px_rgba(0,0,0,0.15)] ${
+      className={`bimbo-header bimbo-panel absolute top-0 left-0 right-0 h-20 bg-[#23211f] border-b border-[#45413e] px-4 z-30 transition-transform duration-300 shadow-[0_5px_15px_rgba(0,0,0,0.15)] ${
         !isImmersive || mode === 'audio' ? 'translate-y-0' : '-translate-y-full'
       }`}
     >

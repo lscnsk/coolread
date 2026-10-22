@@ -80,6 +80,8 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
               border-color: #FBCFE8 !important;
               color: #881337 !important;
           }
+          /* The top bar is opaque, like the reader's bottom bar */
+          .bimbo-mode .bimbo-header.bimbo-panel { background-color: #FFF0F5 !important; }
           .bimbo-mode .bimbo-panel button,
           .bimbo-mode .bimbo-panel span,
           .bimbo-mode .bimbo-panel h2,
@@ -196,6 +198,8 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
               border-color: #BAE6FD !important;
               color: #0C4A6E !important;
           }
+          /* The top bar is opaque, like the reader's bottom bar */
+          .surf-mode .bimbo-header.bimbo-panel { background-color: #FFFFFF !important; }
           .surf-mode .bimbo-panel button,
           .surf-mode .bimbo-panel span,
           .surf-mode .bimbo-panel h2,
