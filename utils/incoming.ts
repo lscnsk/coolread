@@ -16,6 +16,9 @@ interface IncomingFilesPlugin {
 
 const IncomingFiles = registerPlugin<IncomingFilesPlugin>('IncomingFiles');
 
+/** A short message for the user; `sticky` keeps it on screen until the next one. */
+export type IncomingNotice = (text: string | null, sticky?: boolean) => void;
+
 const SUPPORTED = /\.(fb2|epub|pdf|cbz|cbr|mp3|m4b|m4a|mp4)$/i;
 
 const MIME_EXT: Record<string, string> = {
@@ -36,9 +39,21 @@ const MIME_EXT: Record<string, string> = {
 };
 
 /** Turns one received file into files the library can import (zips such as .fb2.zip are unpacked). */
-async function toImportable(f: IncomingFile): Promise<File[]> {
+async function toImportable(f: IncomingFile, notice: IncomingNotice): Promise<File[]> {
   const blob = await (await fetch(Capacitor.convertFileSrc(f.path))).blob();
   let name = f.name;
+  // A page of az.lib.ru or Wikisource saved with 📥 in the built-in browser: build the fb2 from it
+  if (/\.coolread-page$/i.test(name)) {
+    const url = (await blob.text()).trim();
+    const { webPageToFb2 } = await import('./webBook');
+    notice('📥 Building the book…', true);
+    try {
+      return [await webPageToFb2(url, (done, total) => notice(`📥 Building the book… ${done}/${total}`, true))];
+    } catch (e) {
+      notice(`📥 ${(e as Error).message || 'Could not build the book'}`);
+      throw e;
+    }
+  }
   if (!SUPPORTED.test(name) && !/\.zip$/i.test(name) && MIME_EXT[f.mimeType]) {
     name = `${name}.${MIME_EXT[f.mimeType]}`;
   }
@@ -67,7 +82,7 @@ async function toImportable(f: IncomingFile): Promise<File[]> {
  * Listens for incoming files and hands them to `onFiles`. Returns a cleanup function.
  * Events received before the listener exists are kept by the native side.
  */
-export function listenForIncomingFiles(onFiles: (files: File[]) => Promise<void> | void, onUnsupported: () => void): () => void {
+export function listenForIncomingFiles(onFiles: (files: File[]) => Promise<void> | void, notice: IncomingNotice): () => void {
   if (!Capacitor.isNativePlatform()) return () => {};
   let handle: PluginListenerHandle | null = null;
   let cancelled = false;
@@ -75,15 +90,19 @@ export function listenForIncomingFiles(onFiles: (files: File[]) => Promise<void>
     const paths = files.map(f => f.path);
     try {
       const importable: File[] = [];
+      let failedPage = false;
       for (const f of files) {
         try {
-          importable.push(...(await toImportable(f)));
+          importable.push(...(await toImportable(f, notice)));
         } catch (e) {
+          if (/\.coolread-page$/i.test(f.name)) failedPage = true;
           console.error('Incoming file failed', e);
         }
       }
-      if (importable.length > 0) await onFiles(importable);
-      else onUnsupported();
+      if (importable.length > 0) {
+        if (!failedPage) notice(null);
+        await onFiles(importable);
+      } else if (!failedPage) notice('Unsupported file');
     } finally {
       IncomingFiles.remove({ paths }).catch(() => {});
     }

@@ -58,6 +58,7 @@ public class BrowserActivity extends AppCompatActivity {
     // Finished downloads go to the library together when the browser closes
     private final List<JSObject> finished = new ArrayList<>();
     private boolean closed = false;
+    private TextView saveBook;
 
     private void complete(JSObject file) {
         synchronized (finished) {
@@ -106,6 +107,10 @@ public class BrowserActivity extends AppCompatActivity {
         reload.setOnClickListener(v -> webView.reload());
         TextView close = barButton("❌", dp);
         close.setOnClickListener(v -> finish());
+        // On az.lib.ru and Wikisource the page itself is the book: the app turns it into an fb2
+        saveBook = barButton("📥", dp);
+        saveBook.setVisibility(View.GONE);
+        saveBook.setOnClickListener(v -> savePageAsBook());
 
         titleView = new TextView(this);
         titleView.setTextColor(fg);
@@ -120,6 +125,7 @@ public class BrowserActivity extends AppCompatActivity {
         bar.addView(back);
         bar.addView(forward);
         bar.addView(titleView);
+        bar.addView(saveBook);
         bar.addView(reload);
         bar.addView(close);
         root.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (52 * dp)));
@@ -156,7 +162,13 @@ public class BrowserActivity extends AppCompatActivity {
             }
 
             @Override
+            public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                saveBook.setVisibility(isBookSite(url) ? View.VISIBLE : View.GONE);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
+                saveBook.setVisibility(isBookSite(url) ? View.VISIBLE : View.GONE);
                 // Pages often revoke a blob link right after clicking it; give us time to read it
                 view.evaluateJavascript(
                     "if(!window.__crKeep){window.__crKeep=1;const r=URL.revokeObjectURL.bind(URL);URL.revokeObjectURL=u=>setTimeout(()=>r(u),120000);" +
@@ -223,6 +235,35 @@ public class BrowserActivity extends AppCompatActivity {
         blobDownloads.clear();
         webView.destroy();
         super.onDestroy();
+    }
+
+    private static boolean isBookSite(String url) {
+        if (url == null) return false;
+        try {
+            String host = new URL(url).getHost().toLowerCase();
+            return host.equals("az.lib.ru") || host.endsWith(".az.lib.ru") || host.endsWith("wikisource.org");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Hands the page address to the app, which downloads the text and builds the fb2. */
+    private void savePageAsBook() {
+        String url = webView.getUrl();
+        if (!isBookSite(url)) return;
+        String title = webView.getTitle();
+        String name = safeName(title == null || title.trim().isEmpty() ? "book" : title.trim());
+        if (name.length() > 80) name = name.substring(0, 80);
+        try {
+            File dest = new File(IncomingFilesPlugin.incomingDir(this), System.nanoTime() + "_" + name + ".coolread-page");
+            try (OutputStream out = new FileOutputStream(dest)) {
+                out.write(url.getBytes("UTF-8"));
+            }
+            complete(IncomingFilesPlugin.describe(dest, name + ".coolread-page", "text/x-coolread-page"));
+            toast("📥 The book will be added when you close the browser");
+        } catch (Exception e) {
+            toast("Could not save the page");
+        }
     }
 
     private TextView barButton(String emoji, float dp) {

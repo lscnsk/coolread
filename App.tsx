@@ -437,15 +437,15 @@ function App() {
         setIsCatalogOpen(false);
         await handleExternalFilePickedRef.current(files);
       },
-      () => setUnsupportedNotice(true)
+      (text, sticky) => setIncomingNotice(text ? { text, sticky: !!sticky } : null)
     );
   }, [isLibraryReady]);
-  const [unsupportedNotice, setUnsupportedNotice] = useState(false);
+  const [incomingNotice, setIncomingNotice] = useState<{ text: string; sticky: boolean } | null>(null);
   useEffect(() => {
-    if (!unsupportedNotice) return;
-    const t = setTimeout(() => setUnsupportedNotice(false), 2500);
+    if (!incomingNotice || incomingNotice.sticky) return;
+    const t = setTimeout(() => setIncomingNotice(null), incomingNotice.text.length > 30 ? 5000 : 2500);
     return () => clearTimeout(t);
-  }, [unsupportedNotice]);
+  }, [incomingNotice]);
 
   const handleDownloadCatalogBook = async (catalogBook: CatalogBook) => {
     setDownloadingBookIds(prev => new Set(prev).add(catalogBook.id));
@@ -1373,9 +1373,9 @@ function App() {
             </div>
         )}
         
-        {unsupportedNotice && (
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[110] px-4 py-2 rounded-full bg-black/80 text-white text-sm pointer-events-none">
-                Unsupported file
+        {incomingNotice && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[110] max-w-[90vw] px-4 py-2 rounded-2xl bg-black/80 text-white text-sm text-center pointer-events-none">
+                {incomingNotice.text}
             </div>
         )}
 

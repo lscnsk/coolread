@@ -59,15 +59,33 @@ const PRESET_SOURCES: OpdsSource[] = String(import.meta.env.VITE_OPDS_PRESET || 
   .map(s => s.trim())
   .flatMap(name => (name === 'flibusta' ? [FLIBUSTA_SOURCE] : name === 'mangadex' ? [MANGADEX_SOURCE] : []));
 
+// Sites whose pages the built-in browser turns into fb2 books (📥). Added once; the user can delete them.
+const BOOK_SITES: OpdsSource[] = [
+  { id: 'site_preset_azlib', title: 'az.lib.ru', url: 'http://az.lib.ru/', kind: 'site' },
+  { id: 'site_preset_wikisource', title: 'wikisource', url: 'https://ru.wikisource.org/', kind: 'site' },
+];
+const BOOK_SITES_KEY = 'cool_read_book_sites_added';
+
+async function addBookSitesOnce(sources: OpdsSource[]): Promise<OpdsSource[]> {
+  const get = async () => (isNative ? (await Preferences.get({ key: BOOK_SITES_KEY })).value : localStorage.getItem(BOOK_SITES_KEY));
+  if (await get()) return sources;
+  const missing = BOOK_SITES.filter(b => !sources.some(s => s.id === b.id || s.url.replace(/^https?:\/\//, '').startsWith(b.url.replace(/^https?:\/\//, ''))));
+  const next = [...sources, ...missing];
+  await saveOpdsSources(next);
+  try {
+    if (isNative) await Preferences.set({ key: BOOK_SITES_KEY, value: '1' });
+    else localStorage.setItem(BOOK_SITES_KEY, '1');
+  } catch {}
+  return next;
+}
+
 export async function loadOpdsSources(): Promise<OpdsSource[]> {
   try {
     const raw = isNative ? (await Preferences.get({ key: STORAGE_KEY })).value : localStorage.getItem(STORAGE_KEY);
-    if (raw === null || raw === undefined) {
-      await saveOpdsSources(PRESET_SOURCES);
-      return PRESET_SOURCES;
-    }
+    if (raw === null || raw === undefined) return await addBookSitesOnce(PRESET_SOURCES);
     // Older builds named the preset Flibusta in Russian
-    return (JSON.parse(raw) as OpdsSource[]).map(s => (s.id === FLIBUSTA_SOURCE.id ? { ...s, title: FLIBUSTA_SOURCE.title } : s));
+    const sources = (JSON.parse(raw) as OpdsSource[]).map(s => (s.id === FLIBUSTA_SOURCE.id ? { ...s, title: FLIBUSTA_SOURCE.title } : s));
+    return await addBookSitesOnce(sources);
   } catch {
     return [];
   }
