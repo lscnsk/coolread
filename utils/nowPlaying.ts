@@ -24,6 +24,8 @@ export const NowPlaying = registerPlugin<NowPlayingPlugin>('NowPlaying');
 export function accentOf(appStyle?: string): string {
   switch (appStyle) {
     case 'Marcel': return '#544372';
+    case 'Cozy': return '#9A5B22';
+    case 'Spooky': return '#F97316';
     case 'Bimbo': return '#BE123C';
     case 'Surf': return '#0EA5E9';
     case 'Dragon': return '#EA580C';

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Book, AppMode } from '../types';
+import { themedIcon } from '../utils/themeVariants';
 
 interface AppHeaderProps {
   isImmersive: boolean;
@@ -33,11 +34,11 @@ export function AppHeader({
   onToggleCatalogFilter,
   onBackFromCatalog
 }: AppHeaderProps) {
-  const isDragon = appStyle === 'Dragon';
+  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = appStyle === 'Marcel';
+  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
 
   return (
     <div
@@ -82,7 +83,7 @@ export function AppHeader({
                 transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
                 className="inline-block emoji"
               >
-                {isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚'}
+                {themedIcon(appStyle, isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚')}
               </motion.span>
             </button>
           )}
@@ -107,7 +108,7 @@ export function AppHeader({
         >
           {isMarcel ? (
             <div className="flex items-center justify-center text-3xl pt-1">
-              <span>MarcelRead</span>
+              <span>{appStyle === 'Cozy' ? 'CozyRead' : 'MarcelRead'}</span>
               <motion.span
                 key={`title-emoji-${titleClickKey}`}
                 animate={titleClickKey > 0 ? { scale: [1, 1.4, 1] } : { scale: 1 }}
@@ -126,7 +127,7 @@ export function AppHeader({
                 isDragon ? 'tracking-[0.15em]' : 
                 'tracking-[0.05em]'
               }`}>
-                {isDragon ? 'Roll' : isFF ? 'Final' : isBimbo ? 'Bimbo' : isSurf ? 'Surf' : 'Cool'}
+                {appStyle === 'Spooky' ? 'Spooky' : isDragon ? 'Roll' : isFF ? 'Final' : isBimbo ? 'Bimbo' : isSurf ? 'Surf' : 'Cool'}
               </span>
               <motion.span
                 key={`title-emoji-${titleClickKey}`}
@@ -136,7 +137,7 @@ export function AppHeader({
                   isBimbo ? 'text-4.5xl md:text-5.5xl' : isSurf ? 'text-4.5xl md:text-5.5xl' : isFF ? 'text-3.5xl md:text-4.5xl' : 'text-4.5xl md:text-5.5xl'
                 } ${isDragon ? 'pt-0.5' : isFF ? 'pt-0' : 'pt-0.5'} ${isSurf ? 'mx-1 md:mx-2' : 'mx-1 md:mx-2'}`}
               >
-                {isDragon ? '🐉' : isFF ? '☄️' : isBimbo ? '👑' : isSurf ? '🌊' : '💀'}
+                {themedIcon(appStyle, isDragon ? '🐉' : isFF ? '☄️' : isBimbo ? '👑' : isSurf ? '🌊' : '💀')}
               </motion.span>
               <span className={`text-left shrink-0 truncate ${
                 isBimbo ? 'tracking-[0.08em]' : 
@@ -185,7 +186,7 @@ export function AppHeader({
                 transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
                 className="inline-block emoji"
               >
-                {isMarcel ? '🪻' : isDragon ? '🏰' : isFF ? '📜' : isBimbo ? '💎' : isSurf ? '🐚' : '📖'}
+                {themedIcon(appStyle, isMarcel ? '🪻' : isDragon ? '🏰' : isFF ? '📜' : isBimbo ? '💎' : isSurf ? '🐚' : '📖')}
               </motion.span>
             </button>
           )}

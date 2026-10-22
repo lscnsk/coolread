@@ -85,8 +85,8 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
 
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = appStyle === 'Marcel';
-  const isDragon = appStyle === 'Dragon';
+  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
 
   // --- AUTOMATIC MICRO-TYPOGRAPHY OPTIMIZATION FOR CATALOG ANNOTATIONS ---

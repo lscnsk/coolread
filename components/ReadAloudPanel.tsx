@@ -14,7 +14,7 @@ const ReadAloudPanel: React.FC<ReadAloudPanelProps> = ({ appStyle, visible, barV
   const st = useReadAloud();
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = appStyle === 'Marcel';
+  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
 
   const palette = playerPalette(appStyle);
 

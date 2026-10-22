@@ -15,6 +15,8 @@ const barColors = (appStyle: string) => {
     case 'Bimbo': return { background: '#FFF0F5', foreground: '#881337' };
     case 'Surf': return { background: '#F0F9FF', foreground: '#0C4A6E' };
     case 'Marcel': return { background: '#F3EFFB', foreground: '#2F2440' };
+    case 'Cozy': return { background: '#F7EFE3', foreground: '#3B2A1E' };
+    case 'Spooky': return { background: '#17121F', foreground: '#FDBA74' };
     case 'Dragon': return { background: '#271c19', foreground: '#fcd34d' };
     case 'Final':
     case 'Final Fantasy': return { background: '#0b1d3a', foreground: '#f0deba' };

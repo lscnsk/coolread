@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { themedIcon } from '../utils/themeVariants';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Book, PersistedState } from '../types';
 import { ChevronDown } from 'lucide-react';
@@ -175,8 +176,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
-  const isDragon = appStyle === 'Dragon';
-  const isMarcel = appStyle === 'Marcel';
+  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
   // Unselected style buttons in Settings: a quiet border in the current style's colors
   const styleBtnIdle = `${
     isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isMarcel ? 'border-[#DBD0EF]' : isDragon ? 'border-[#4a2511]' : isFF ? 'border-[#17335e]' : 'border-[#363330]'
@@ -245,13 +246,13 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                   className="w-full h-full object-cover"
                   fallbackComponent={
                     <span className="text-lg opacity-50 text-[#666] emoji">
-                      {book.type === 'audio' ? (isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖'))))}
+                      {themedIcon(appStyle, book.type === 'audio' ? (isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖')))))}
                     </span>
                   }
                 />
             ) : (
                 <span className="text-lg opacity-50 text-[#666] emoji">
-                  {book.type === 'audio' ? (isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖'))))}
+                  {themedIcon(appStyle, book.type === 'audio' ? (isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖')))))}
                 </span>
             )}
         </div>
@@ -362,7 +363,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           <h2 className="text-xl font-bold flex items-center gap-1.5 text-[#fffff0] min-w-0 flex-1 overflow-hidden">
             {view === 'library' ? (
               <>
-                <span className="text-3xl leading-none flex-shrink-0 emoji">{isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
+                <span className="text-3xl leading-none flex-shrink-0 emoji">{themedIcon(appStyle, isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚'))))}</span>
                 <span className={`leading-normal whitespace-nowrap ${isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Library</span>
               </>
             ) : (
@@ -454,7 +455,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                   <button 
                     onClick={() => onAppStyleChange('Dragon')}
                     className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      isDragon 
+                      appStyle === 'Dragon' 
                         ? 'bg-[#363330] border-[#57534e] text-[#fffff0] shadow-sm' 
                         : styleBtnIdle
                     }`}
@@ -483,6 +484,28 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                   >
                     <span className="font-marcel text-base font-medium leading-none">Marcel</span>
                     <span className="text-xl emoji leading-none shrink-0">🪻</span>
+                  </button>
+                  <button 
+                    onClick={() => onAppStyleChange('Spooky')}
+                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      appStyle === 'Spooky' 
+                        ? 'bg-[#17121F] border-[#F97316] text-[#FDBA74] shadow-sm' 
+                        : styleBtnIdle
+                    }`}
+                  >
+                    <span className="text-lg tracking-wider leading-none" style={{ fontFamily: "'Creepster', cursive" }}>Spooky</span>
+                    <span className="text-xl emoji leading-none shrink-0">🎃</span>
+                  </button>
+                  <button 
+                    onClick={() => onAppStyleChange('Cozy')}
+                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      appStyle === 'Cozy' 
+                        ? 'bg-[#F7EFE3] border-[#C9A47A] text-[#3B2A1E] shadow-sm' 
+                        : styleBtnIdle
+                    }`}
+                  >
+                    <span className="text-base leading-none" style={{ fontFamily: "'Pacifico', cursive" }}>Cozy</span>
+                    <span className="text-xl emoji leading-none shrink-0">☕</span>
                   </button>
                 </div>
 

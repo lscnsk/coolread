@@ -34,6 +34,10 @@ export const opdsPalette = (appStyle: string) => {
       return { text: '#881337', muted: '#BE123C', border: '#FBCFE8', card: '#FFFFFF', accent: '#BE123C', input: '#FFFFFF', btnText: '#FFFFFF' };
     case 'Surf':
       return { text: '#0C4A6E', muted: '#0369A1', border: '#BAE6FD', card: '#FFFFFF', accent: '#0284C7', input: '#FFFFFF', btnText: '#FFFFFF' };
+    case 'Cozy':
+      return { text: '#3B2A1E', muted: '#8A6E55', border: '#D9C3A5', card: '#F7EFE3', accent: '#9A5B22', input: '#FFFFFF', btnText: '#FFFFFF' };
+    case 'Spooky':
+      return { text: '#FDBA74', muted: '#9F8FBF', border: '#4C2A7A', card: '#1E1530', accent: '#F97316', input: '#120D1C', btnText: '#1E1530' };
     case 'Marcel':
       return { text: '#2F2440', muted: '#766594', border: '#C4B5E6', card: '#F3EFFB', accent: '#544372', input: '#FFFFFF', btnText: '#FFFFFF' };
     case 'Dragon':
@@ -158,8 +162,8 @@ export const OpdsView: React.FC<OpdsViewProps> = ({ source, appStyle = 'Cool', o
       return next;
     });
 
-  const isBimbo = appStyle === 'Bimbo', isSurf = appStyle === 'Surf', isMarcel = appStyle === 'Marcel';
-  const isDragon = appStyle === 'Dragon', isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
+  const isBimbo = appStyle === 'Bimbo', isSurf = appStyle === 'Surf', isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky'), isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
   const brandClass = isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284C7]' : isDragon ? 'text-[#fcd34d]' : isFF ? 'text-[#dfc894]' : 'text-[#a8a29e]/80';
   const headerBorder = isMarcel ? 'border-[#C4B5E6]/70' : isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isDragon ? 'border-[#7f1d1d]/60' : isFF ? 'border-[#406da3]/50' : 'border-[#45413e]/30';
   const inputClass = isMarcel

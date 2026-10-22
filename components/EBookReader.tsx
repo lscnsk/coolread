@@ -6,6 +6,7 @@ import { getFontFamilyCSS } from '../utils/fonts';
 import { registerReader } from '../utils/readAloud';
 import { accentOf, coverData } from '../utils/nowPlaying';
 import { sanitizeHtml, sanitizeNode } from '../utils/sanitize';
+import { themedCss } from '../utils/themeVariants';
 // @ts-ignore
 import Hypher from 'hypher';
 // @ts-ignore
@@ -72,6 +73,18 @@ function getSearchHighlightColors(style?: string, th?: 'dark' | 'light') {
     return {
       bg: th === 'dark' ? 'rgba(14, 165, 233, 0.45)' : 'rgba(56, 189, 248, 0.38)',
       outline: '#0284c7',
+    };
+  }
+  if (style === 'Spooky') {
+    return {
+      bg: th === 'dark' ? 'rgba(249, 115, 22, 0.45)' : 'rgba(251, 146, 60, 0.40)',
+      outline: '#a855f7',
+    };
+  }
+  if (style === 'Cozy') {
+    return {
+      bg: th === 'dark' ? 'rgba(192, 132, 61, 0.45)' : 'rgba(192, 132, 61, 0.32)',
+      outline: '#9a5b22',
     };
   }
   if (style === 'Dragon') {
@@ -3495,8 +3508,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
 
   // Styles based on theme
   const containerClasses = theme === 'light' 
-     ? (appStyle === 'Bimbo' ? 'bg-[#faf0f4] text-[#4a1525]' : appStyle === 'Surf' ? 'bg-[#f4f7f9] text-[#1e3a4c]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#f5f1e7] text-[#2b251e]' : appStyle === 'Dragon' ? 'bg-[#fdf9f1] text-[#3d2a22]' : appStyle === 'Marcel' ? 'bg-[#F3EFFB] text-[#2F2440]' : 'bg-[#fbfaf0] text-[#282625]')
-     : (appStyle === 'Bimbo' ? 'bg-[#1c0f13] text-[#e8cbd5]' : appStyle === 'Surf' ? 'bg-[#111e25] text-[#b5cbd6]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#0d1a33] text-[#d6d0c0]' : appStyle === 'Dragon' ? 'bg-[#1c1412] text-[#d6c5b4]' : appStyle === 'Marcel' ? 'bg-[#1a1918] text-[#c7c5c1]' : 'bg-[#1a1918] text-[#c7c5c1]');
+     ? (appStyle === 'Bimbo' ? 'bg-[#faf0f4] text-[#4a1525]' : appStyle === 'Surf' ? 'bg-[#f4f7f9] text-[#1e3a4c]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#f5f1e7] text-[#2b251e]' : (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'bg-[#fdf9f1] text-[#3d2a22]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'bg-[#F3EFFB] text-[#2F2440]' : 'bg-[#fbfaf0] text-[#282625]')
+     : (appStyle === 'Bimbo' ? 'bg-[#1c0f13] text-[#e8cbd5]' : appStyle === 'Surf' ? 'bg-[#111e25] text-[#b5cbd6]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#0d1a33] text-[#d6d0c0]' : (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'bg-[#1c1412] text-[#d6c5b4]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'bg-[#1a1918] text-[#c7c5c1]' : 'bg-[#1a1918] text-[#c7c5c1]');
 
   const nextBtnClasses = theme === 'light'
      ? (appStyle === 'Bimbo' 
@@ -3505,9 +3518,9 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         ? 'border-[#bae6fd] bg-[#f4f7f9] text-[#0369a1] hover:bg-[#e0f2fe] hover:border-[#7dd3fc]'
         : (appStyle === 'Final' || appStyle === 'Final Fantasy') 
         ? 'border-[#e0d6c1] bg-[#f5f1e7] text-[#594d3f] hover:bg-[#eae3d1] hover:border-[#cca972]'
-        : appStyle === 'Dragon'
+        : (appStyle === 'Dragon' || appStyle === 'Spooky')
         ? 'border-[#e8dcc8] bg-[#fdf9f1] text-[#7a4c3a] hover:bg-[#f2eadd] hover:border-[#c28469]'
-        : appStyle === 'Marcel'
+        : (appStyle === 'Marcel' || appStyle === 'Cozy')
         ? 'border-[#C4B5E6] bg-[#F3EFFB] text-[#544372] hover:bg-[#E8E0F5] hover:border-[#AC97D7]'
         : 'border-[#e0ded5] bg-[#fbfaf0] text-[#555] hover:text-[#000] hover:border-[#ccc] hover:bg-[#f0eee4]')
      : (appStyle === 'Bimbo'
@@ -3516,19 +3529,19 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         ? 'border-[#1e3a4c] bg-[#111e25] text-[#b5cbd6] hover:bg-[#182933] hover:border-[#2a526b]'
         : (appStyle === 'Final' || appStyle === 'Final Fantasy') 
         ? 'border-[#1f3358] bg-[#0d1a33] text-[#a6c0ea] hover:bg-[#13244a] hover:border-[#2a4a7a]'
-        : appStyle === 'Dragon'
+        : (appStyle === 'Dragon' || appStyle === 'Spooky')
         ? 'border-[#3d2a22] bg-[#1c1412] text-[#d6c5b4] hover:bg-[#2e1d18] hover:border-[#5c3c2e]'
-        : appStyle === 'Marcel'
+        : (appStyle === 'Marcel' || appStyle === 'Cozy')
         ? 'border-[#363330] bg-[#1a1918] text-[#8C937A] hover:text-[#c7c5c1] hover:bg-[#2a2927]'
         : 'border-[#363330] bg-[#1a1918] text-[#9a9893] hover:text-[#c7c5c1] hover:bg-[#2a2927]');
   
   const hrClasses = theme === 'light'
      ? (appStyle === 'Bimbo' 
         ? 'border-[#eac7d4]' 
-        : (appStyle === 'Surf' ? 'border-[#cce1ed]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'border-[#e0d6c1]' : (appStyle === 'Dragon' ? 'border-[#e8dcc8]' : appStyle === 'Marcel' ? 'border-[#C4B5E6]' : 'border-[#e0ded5]'))))
+        : (appStyle === 'Surf' ? 'border-[#cce1ed]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'border-[#e0d6c1]' : ((appStyle === 'Dragon' || appStyle === 'Spooky') ? 'border-[#e8dcc8]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'border-[#C4B5E6]' : 'border-[#e0ded5]'))))
      : (appStyle === 'Bimbo' 
         ? 'border-[#4a1525]' 
-        : (appStyle === 'Surf' ? 'border-[#1e3a4c]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'border-[#1f3358]' : (appStyle === 'Dragon' ? 'border-[#3d2a22]' : appStyle === 'Marcel' ? 'border-[#363330]' : 'border-[#363330]'))));
+        : (appStyle === 'Surf' ? 'border-[#1e3a4c]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'border-[#1f3358]' : ((appStyle === 'Dragon' || appStyle === 'Spooky') ? 'border-[#3d2a22]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'border-[#363330]' : 'border-[#363330]'))));
 
   return (
     <div className={`flex-1 relative w-full h-full overflow-hidden transition-colors duration-300 bimbo-reader-canvas ${containerClasses}`}>
@@ -3537,8 +3550,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 <div className={`w-11 h-11 border-3 border-t-transparent rounded-full animate-spin shadow-lg ${
                     appStyle === 'Bimbo' ? 'border-pink-300 border-t-pink-600' : 
                     appStyle === 'Surf' ? 'border-sky-300 border-t-sky-600' : 
-                    appStyle === 'Dragon' ? 'border-orange-300 border-t-orange-600' :
-                    appStyle === 'Marcel' ? 'border-[#C4B5E6] border-t-[#544372]' :
+                    (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'border-orange-300 border-t-orange-600' :
+                    (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'border-[#C4B5E6] border-t-[#544372]' :
                     (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'border-[#e0d6c1] border-t-[#cca972]' :
                     'border-[#fffff0]/30 border-t-[#fffff0]'
                 }`}></div>
@@ -3552,19 +3565,19 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 appStyle === 'Bimbo' ? 'border-[#eac7d4] dark:border-[#4a1525]' :
                 appStyle === 'Surf' ? 'border-[#cce1ed] dark:border-[#1e3a4c]' :
                 (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'border-[#e0d6c1] dark:border-[#1f3358]' :
-                appStyle === 'Dragon' ? 'border-[#e8dcc8] dark:border-[#3d2a22]' :
-                appStyle === 'Marcel' ? 'border-[#C4B5E6] dark:border-[#363330]' :
+                (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'border-[#e8dcc8] dark:border-[#3d2a22]' :
+                (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'border-[#C4B5E6] dark:border-[#363330]' :
                 'border-black/30 dark:border-white/30';
 
             const isBimbo = appStyle === 'Bimbo';
             const isSurf = appStyle === 'Surf';
-            const isMarcel = appStyle === 'Marcel';
-            const isDragon = appStyle === 'Dragon';
+            const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+            const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
             const isFinal = appStyle === 'Final' || appStyle === 'Final Fantasy';
             
-            const accentColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFinal ? '#cca972' : (theme === 'light' ? '#2c2a28' : '#ffffff');
-            const iconColor = isMarcel ? '#F3EFFB' : isBimbo ? '#FFFFFF' : isSurf ? '#FFFFFF' : (theme === 'light' ? '#ffffff' : '#1c1c1c');
-            const controlColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0284c7' : isDragon ? '#ea580c' : isFinal ? '#cca972' : (theme === 'light' ? '#1c1c1c' : '#ffffff');
+            const accentColor = appStyle === 'Cozy' ? '#9A5B22' : isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFinal ? '#cca972' : (theme === 'light' ? '#2c2a28' : '#ffffff');
+            const iconColor = appStyle === 'Cozy' ? '#F7EFE3' : isMarcel ? '#F3EFFB' : isBimbo ? '#FFFFFF' : isSurf ? '#FFFFFF' : (theme === 'light' ? '#ffffff' : '#1c1c1c');
+            const controlColor = appStyle === 'Cozy' ? '#9A5B22' : isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0284c7' : isDragon ? '#ea580c' : isFinal ? '#cca972' : (theme === 'light' ? '#1c1c1c' : '#ffffff');
 
             const windowStart = rsvpIndex;
             const windowEnd = Math.min(rsvpWords.length, rsvpIndex + 31);
@@ -3847,7 +3860,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         })()}
 
         {/* Global Reader Styles Injection */}
-        <style>{`
+        <style>{themedCss(appStyle, `
           @keyframes pulse-highlight {
             0%, 100% { box-shadow: 0 0 2px rgba(255,255,255,0.5); }
             50% { box-shadow: 0 0 8px rgba(255,255,255,0.8); background-color: rgba(255,255,255,0.35); }
@@ -3874,7 +3887,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              font-family: ${readerFontCSS} !important;
           }
           ::highlight(tts-word) {
-             background-color: ${appStyle === 'Bimbo' ? 'rgba(244,114,182,0.38)' : appStyle === 'Surf' ? 'rgba(56,189,248,0.32)' : appStyle === 'Marcel' ? 'rgba(172,151,215,0.45)' : appStyle === 'Dragon' ? 'rgba(234,88,12,0.38)' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'rgba(223,200,148,0.38)' : theme === 'light' ? 'rgba(217,119,6,0.25)' : 'rgba(251,191,36,0.28)'};
+             background-color: ${appStyle === 'Bimbo' ? 'rgba(244,114,182,0.38)' : appStyle === 'Surf' ? 'rgba(56,189,248,0.32)' : appStyle === 'Cozy' ? 'rgba(192,132,61,0.35)' : appStyle === 'Spooky' ? 'rgba(168,85,247,0.38)' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'rgba(172,151,215,0.45)' : (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'rgba(234,88,12,0.38)' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'rgba(223,200,148,0.38)' : theme === 'light' ? 'rgba(217,119,6,0.25)' : 'rgba(251,191,36,0.28)'};
              color: inherit;
           }
           .reader-content {
@@ -4019,7 +4032,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              font-style: italic !important; 
              ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#db2777' : '#fb7185'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#b45309' : '#93c5fd'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
           }
           .reader-content .it-corr {
              margin-right: 0.08em;
@@ -4028,7 +4041,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              font-weight: bold !important; 
              ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#f472b6'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#1e3a8a' : '#fcd34d'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
           }
 
           /* Reset for standard blocks to prevent styling leaks from previous tags */
@@ -4106,7 +4119,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 color: inherit;
                 ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
                 ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#2563eb' : '#60a5fa'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 8px rgba(96,165,250,0.4)'} !important;` : ''}
-                ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
+                ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
             }
           ` : ''}
 
@@ -4142,7 +4155,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              margin-bottom: 1.2em;
              ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#FFF0F5'} !important; border-bottom-color: ${theme === 'light' ? '#FBCFE8' : '#be123c'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#92400e' : '#f0deba'} !important; border-bottom-color: ${theme === 'light' ? '#d97706' : '#dfc894'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#fcd34d'} !important; border-bottom-color: ${theme === 'light' ? '#450a0a' : '#7f1d1d'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `color: ${theme === 'light' ? '#991b1b' : '#fcd34d'} !important; border-bottom-color: ${theme === 'light' ? '#450a0a' : '#7f1d1d'} !important;` : ''}
           }
           
           /* Subtitles (H3+) - No Separator */
@@ -4153,7 +4166,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              padding-bottom: 0 !important;
              ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#1e40af' : '#a6c0ea'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#7f1d1d' : '#b45309'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `color: ${theme === 'light' ? '#7f1d1d' : '#b45309'} !important;` : ''}
           }
 
           /* Ensure elements inside headers also don't indent and allow multi-line titles */
@@ -4295,7 +4308,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              border-left: 3px solid rgba(128, 128, 128, 0.4) !important;
              ${appStyle === 'Bimbo' ? `border-left-color: ${theme === 'light' ? '#FBCFE8' : '#be123c'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `border-left-color: ${theme === 'light' ? '#d97706' : '#dfc894'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `border-left-color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `border-left-color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
           }
 
           .reader-content cite p,
@@ -4422,7 +4435,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              box-sizing: border-box !important;
              ${appStyle === 'Bimbo' ? `border-color: ${theme === 'light' ? '#FBCFE8' : '#be123c'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `border-color: ${theme === 'light' ? 'rgba(217, 119, 6, 0.35)' : 'rgba(223, 200, 148, 0.35)'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `border-color: ${theme === 'light' ? 'rgba(153, 27, 27, 0.35)' : 'rgba(245, 158, 11, 0.35)'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `border-color: ${theme === 'light' ? 'rgba(153, 27, 27, 0.35)' : 'rgba(245, 158, 11, 0.35)'} !important;` : ''}
           }
 
           .reader-content table th {
@@ -4433,7 +4446,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              background-color: rgba(128, 128, 128, 0.08) !important;
              ${appStyle === 'Bimbo' ? `background-color: ${theme === 'light' ? 'rgba(251, 207, 232, 0.3)' : 'rgba(190, 18, 60, 0.2)'} !important;` : ''}
              ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `background-color: ${theme === 'light' ? 'rgba(217, 119, 6, 0.1)' : 'rgba(223, 200, 148, 0.12)'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `background-color: ${theme === 'light' ? 'rgba(153, 27, 27, 0.1)' : 'rgba(245, 158, 11, 0.12)'} !important;` : ''}
+             ${(appStyle === 'Dragon' || appStyle === 'Spooky') ? `background-color: ${theme === 'light' ? 'rgba(153, 27, 27, 0.1)' : 'rgba(245, 158, 11, 0.12)'} !important;` : ''}
           }
 
           .reader-content table td p,
@@ -4752,7 +4765,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              max-width: 100% !important;
              object-fit: contain !important;
           }
-        `}</style>
+        `)}</style>
         
         {(() => {
             const hasTopHeader = isPagedMode && pageIndex > 0 && Boolean(currentChapterTitle) && !isCoverPage;
@@ -4860,8 +4873,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                                     }}
                                     className={`flex items-center gap-2 px-6 py-2 rounded-full border transition-all group shadow-md opacity-80 hover:opacity-100 ${nextBtnClasses}`}
                                  >
-                                    <span className={appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : (appStyle === 'Dragon' ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
-                                        {appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Dragon' ? 'Roll for Initiative 🎲' : appStyle === 'Marcel' ? 'Turn page 🍵' : 'Continue')))}
+                                    <span className={appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : ((appStyle === 'Dragon' || appStyle === 'Spooky') ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
+                                        {appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Spooky' ? 'Turn if you dare 🕯️' : appStyle === 'Cozy' ? 'One more chapter ☕' : (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'Roll for Initiative 🎲' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'Turn page 🍵' : 'Continue')))}
                                     </span>
                                     <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                                  </button>
@@ -4886,8 +4899,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                                 hasTopHeader && !uiVisible ? 'opacity-100' : 'opacity-0'
                             } ${
                                 theme === 'light' 
-                                  ? (appStyle === 'Bimbo' ? 'bg-[#BE123C]/25' : appStyle === 'Surf' ? 'bg-[#0369a1]/25' : appStyle === 'Marcel' ? 'bg-[#544372]/25' : 'bg-stone-300/80')
-                                  : (appStyle === 'Bimbo' ? 'bg-[#e8cbd5]/25' : appStyle === 'Surf' ? 'bg-[#b5cbd6]/25' : appStyle === 'Marcel' ? 'bg-[#c4b5e6]/25' : 'bg-stone-700/80')
+                                  ? (appStyle === 'Bimbo' ? 'bg-[#BE123C]/25' : appStyle === 'Surf' ? 'bg-[#0369a1]/25' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'bg-[#544372]/25' : 'bg-stone-300/80')
+                                  : (appStyle === 'Bimbo' ? 'bg-[#e8cbd5]/25' : appStyle === 'Surf' ? 'bg-[#b5cbd6]/25' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'bg-[#c4b5e6]/25' : 'bg-stone-700/80')
                             }`}
                         />
 
@@ -4901,8 +4914,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                                     hasTopHeader && !uiVisible ? 'opacity-75' : 'opacity-0'
                                 } ${
                                     theme === 'light' 
-                                      ? (appStyle === 'Bimbo' ? 'text-[#881337]' : appStyle === 'Surf' ? 'text-[#0369a1]' : appStyle === 'Marcel' ? 'text-[#544372]' : 'text-stone-700')
-                                      : (appStyle === 'Bimbo' ? 'text-[#e8cbd5]' : appStyle === 'Surf' ? 'text-[#b5cbd6]' : appStyle === 'Marcel' ? 'text-[#c4b5e6]' : 'text-stone-300')
+                                      ? (appStyle === 'Bimbo' ? 'text-[#881337]' : appStyle === 'Surf' ? 'text-[#0369a1]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'text-[#544372]' : 'text-stone-700')
+                                      : (appStyle === 'Bimbo' ? 'text-[#e8cbd5]' : appStyle === 'Surf' ? 'text-[#b5cbd6]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'text-[#c4b5e6]' : 'text-stone-300')
                                 }`}
                             >
                                 {currentChapterTitle}
@@ -4930,8 +4943,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                                     isCoverPage || uiVisible ? 'opacity-0 pointer-events-none' : 'opacity-75 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5'
                                 } ${
                                     theme === 'light' 
-                                      ? (appStyle === 'Bimbo' ? 'text-[#881337]' : appStyle === 'Surf' ? 'text-[#0369a1]' : appStyle === 'Marcel' ? 'text-[#544372]' : 'text-stone-700')
-                                      : (appStyle === 'Bimbo' ? 'text-[#e8cbd5]' : appStyle === 'Surf' ? 'text-[#b5cbd6]' : appStyle === 'Marcel' ? 'text-[#c4b5e6]' : 'text-stone-300')
+                                      ? (appStyle === 'Bimbo' ? 'text-[#881337]' : appStyle === 'Surf' ? 'text-[#0369a1]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'text-[#544372]' : 'text-stone-700')
+                                      : (appStyle === 'Bimbo' ? 'text-[#e8cbd5]' : appStyle === 'Surf' ? 'text-[#b5cbd6]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'text-[#c4b5e6]' : 'text-stone-300')
                                 }`}
                             >
                                 {pageDisplayMode === 'chapter' ? (
