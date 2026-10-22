@@ -386,7 +386,8 @@ const hasContent = (s: Section): boolean => {
 // ---------- Fetching ----------
 
 export async function fetchHtml(url: string): Promise<string> {
-  const res = await httpGet(url, undefined, true, { Accept: 'text/html,*/*;q=0.8' }, { timeoutMs: 60000, sameProtocol: true });
+  const wiki = /wikisource\.org/i.test(url) ? { 'Api-User-Agent': 'CoolRead/1.93 (Android e-book reader)', 'User-Agent': 'CoolRead/1.93 (Android e-book reader)' } : {};
+  const res = await httpGet(url, undefined, true, { Accept: 'text/html,*/*;q=0.8', ...wiki }, { timeoutMs: 60000, sameProtocol: true });
   if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.blob!.arrayBuffer());
   const head = new TextDecoder('latin1').decode(bytes.slice(0, 2048)).toLowerCase();

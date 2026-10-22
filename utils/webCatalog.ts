@@ -1,3 +1,4 @@
+import { httpGet } from './opds';
 import type { OpdsEntry, OpdsFeed, OpdsLink } from './opds';
 import { fetchHtml } from './webBook';
 import { generatedCoverUrl } from './coverArt';
@@ -23,6 +24,18 @@ const plainText = (html: string) => new DOMParser().parseFromString(html, 'text/
 
 /** Builds the feed for one catalog address. */
 export async function fetchWebCatalogFeed(url: string): Promise<OpdsFeed> {
+  try {
+    return await buildFeed(url);
+  } catch (e: any) {
+    // Shown to the user as is (see opdsErrorText): say which site and why
+    const site = url.includes('wikisource') ? 'Wikisource' : 'az.lib.ru';
+    const m = String(e?.message || e);
+    const why = /429/.test(m) ? 'too many requests, try again in a minute' : /HTTP \d+/.test(m) ? m.match(/HTTP \d+/)![0] : /network|no answer/i.test(m) ? 'no connection' : m.slice(0, 80);
+    throw new Error(`web:${site}: ${why}`);
+  }
+}
+
+async function buildFeed(url: string): Promise<OpdsFeed> {
   const u = new URL(url.replace(WEB_CATALOG_PREFIX, 'http://web/'));
   const site = u.pathname.split('/')[1];
   const q = u.searchParams.get('q') || '';
@@ -30,7 +43,7 @@ export async function fetchWebCatalogFeed(url: string): Promise<OpdsFeed> {
   const searchTemplate = `${WEB_CATALOG_PREFIX}${site}/search?q={searchTerms}`;
   if (site === 'azlib') {
     const entries = q ? await withCovers(await searchAzLib(q)) : [];
-    return { title: 'az.lib.ru', url, entries, searchTemplate, searchHint: 'author, title: чехов вишневый' };
+    return { title: 'az.lib.ru', url, entries, searchTemplate, searchHint: 'author, then words of the title' };
   }
   if (site === 'wikisource') {
     if (!q) return { title: 'wikisource', url, entries: [], searchTemplate };
@@ -169,12 +182,18 @@ const WS = 'https://ru.wikisource.org';
 const WS_API = `${WS}/w/api.php`;
 const wsPageUrl = (title: string) => `${WS}/wiki/${encodeURIComponent(title.replace(/ /g, '_')).replace(/%2F/g, '/')}`;
 
+// Wikimedia asks apps to name themselves; requests with a generic Android agent can be refused
+export const WS_HEADERS = { 'Api-User-Agent': 'CoolRead/1.93 (Android e-book reader)', 'User-Agent': 'CoolRead/1.93 (Android e-book reader)' };
+
 async function wsApi(params: Record<string, string>): Promise<any> {
   const qs = new URLSearchParams({ format: 'json', formatversion: '2', origin: '*', ...params });
   // The API answers "too many requests" to quick bursts: wait and try again
   for (let attempt = 0; ; attempt++) {
     try {
-      return JSON.parse(await fetchHtml(`${WS_API}?${qs}`));
+      // As text: the phone's HTTP layer hands JSON answers over already parsed, not as file data
+      const res = await httpGet(`${WS_API}?${qs}`, undefined, false, { Accept: 'application/json', ...WS_HEADERS }, { timeoutMs: 30000, sameProtocol: true });
+      if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
+      return JSON.parse(res.text || 'null');
     } catch (e) {
       if (attempt >= 3 || !/HTTP 429/.test(String((e as Error)?.message))) throw e;
       await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));

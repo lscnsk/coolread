@@ -20,8 +20,8 @@ export async function drawCover(title: string, author: string, scale = 1): Promi
     const paper = '#f5efe3', ink = '#2a2420';
     g.fillStyle = paper; g.fillRect(0, 0, W, H);
     g.strokeStyle = ink;
-    g.lineWidth = 7; g.strokeRect(48, 48, W - 96, H - 96);
-    g.lineWidth = 2.5; g.strokeRect(74, 74, W - 148, H - 148);
+    g.lineWidth = 4.5; g.strokeRect(48, 48, W - 96, H - 96);
+    g.lineWidth = 1.6; g.strokeRect(72, 72, W - 144, H - 144);
 
     const maxW = W - 148 - 120;
     g.fillStyle = ink; g.textAlign = 'center'; g.textBaseline = 'alphabetic';

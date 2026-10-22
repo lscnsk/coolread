@@ -4850,7 +4850,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                     {/* End of Chapter Line (Replaces Text for scroll mode) */}
                     {!isPagedMode && (
                         propChapterIndex < book.chapters.length - 1 ? (
-                             <div className={`w-full flex flex-col items-center justify-center ${isCoverPage ? 'pb-10 pt-2' : 'pt-6 pb-8 mt-1'}`}>
+                             <div className={`w-full flex flex-col items-center justify-center ${isCoverPage ? 'pb-10 pt-[4.6px]' : 'pt-6 pb-8 mt-1'}`}>
                                  <hr className={`w-16 border-t-2 opacity-25 ${isCoverPage ? 'mb-4' : 'mb-10'} ${hrClasses}`} />
                                  
                                  <button

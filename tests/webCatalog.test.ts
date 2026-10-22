@@ -30,7 +30,8 @@ const api = (url: string) => {
   return { query: { pages: titles.map(t => (cats[t] ? { title: t, categories: cats[t].map(c => ({ title: 'Категория:' + c })) } : { title: t, missing: true })) } };
 };
 
-vi.mock('../utils/webBook', () => ({ fetchHtml: async (url: string) => JSON.stringify(api(url)) }));
+vi.mock('../utils/opds', () => ({ httpGet: async (url: string) => ({ status: 200, text: JSON.stringify(api(url)), contentType: 'application/json' }) }));
+vi.mock('../utils/webBook', () => ({ fetchHtml: async () => '' }));
 vi.mock('../utils/coverArt', () => ({ generatedCoverUrl: async () => undefined }));
 
 describe('Wikisource catalog', () => {
