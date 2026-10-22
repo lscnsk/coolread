@@ -1,5 +1,4 @@
 import React, { useRef } from 'react';
-import { themedIcon } from '../utils/themeVariants';
 
 interface EmptyStateProps {
   isLoading: boolean;
@@ -27,11 +26,11 @@ export function EmptyState({
   onOpenCatalog,
   catalogNames
 }: EmptyStateProps) {
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isMarcel = appStyle === 'Marcel';
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isDragon = appStyle === 'Dragon';
 
   const buttonStyle = isMarcel
     ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:border-[#AC97D7]'
@@ -67,7 +66,7 @@ export function EmptyState({
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 mt-16 z-0 relative">
         <div className="text-4xl emoji">
-           {themedIcon(appStyle, isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚')}
+           {isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚'}
         </div>
         <div className="max-w-xs w-full space-y-3">
            {/* Add books */}
@@ -147,9 +146,9 @@ export function EmptyState({
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-[#444] space-y-4 mt-16 z-0 relative">
       <div className="text-6xl emoji">
-        {themedIcon(appStyle, mode === 'audio'
+        {mode === 'audio'
           ? isDragon ? '📯' : isFF ? '🎼' : isBimbo ? '💅' : isSurf ? '🏄‍♂️' : isMarcel ? '☕' : '💿'
-          : isDragon ? '📜' : isFF ? '📜' : isBimbo ? '🩰' : isSurf ? '🌊' : isMarcel ? '🪻' : '📄')}
+          : isDragon ? '📜' : isFF ? '📜' : isBimbo ? '🩰' : isSurf ? '🌊' : isMarcel ? '🪻' : '📄'}
       </div>
       <p>
         {isDragon

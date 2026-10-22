@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { themedIcon } from '../utils/themeVariants';
 import { Chapter, Bookmark } from '../types';
 import { ChevronDown, ChevronRight, Minus } from 'lucide-react';
 import { convertChapterToMarkdown } from '../utils/markdown';
@@ -51,10 +50,10 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
   appStyle = "Cool",
   isAudio = false
 }) => {
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isMarcel = appStyle === 'Marcel';
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isDragon = appStyle === 'Dragon';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
 
   const actionButtonClass = `w-full h-[64px] shrink-0 px-2.5 py-1 border-2 border-dashed rounded transition-all flex items-center gap-3 group text-left ${
@@ -680,9 +679,9 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
         ) : (
              <h2 className="text-xl font-bold flex items-center gap-1.5 text-[#fffff0] truncate min-w-0 flex-1">
                 <span className="text-3xl leading-none shrink-0 emoji">
-                    {themedIcon(appStyle, isBookmarksMode ? '🔖' : ((appStyle === 'Marcel' || appStyle === 'Cozy') ? '🪻' : (appStyle === 'Dragon' || appStyle === 'Spooky') ? '🏰' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? '📜' : (appStyle === 'Bimbo' ? '💎' : (appStyle === 'Surf' ? '🐚' : '📖')))))}
+                    {isBookmarksMode ? '🔖' : (appStyle === 'Marcel' ? '🪻' : appStyle === 'Dragon' ? '🏰' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? '📜' : (appStyle === 'Bimbo' ? '💎' : (appStyle === 'Surf' ? '🐚' : '📖'))))}
                 </span>
-                <span className={`leading-normal whitespace-nowrap ${(appStyle === 'Marcel' || appStyle === 'Cozy') ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : appStyle === 'Bimbo' ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (appStyle === 'Surf' ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : ((appStyle === 'Dragon' || appStyle === 'Spooky') ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>
+                <span className={`leading-normal whitespace-nowrap ${appStyle === 'Marcel' ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : appStyle === 'Bimbo' ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (appStyle === 'Surf' ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (appStyle === 'Dragon' ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>
                     {isBookmarksMode ? 'Bookmarks' : 'Chapters'}
                 </span>
              </h2>
@@ -810,7 +809,7 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
                                         ? 'bg-white/80 hover:bg-white text-[#BE123C] border-[#FBCFE8]'
                                         : appStyle === 'Surf'
                                         ? 'bg-white/80 hover:bg-white text-[#0C4A6E] border-[#BAE6FD]'
-                                        : (appStyle === 'Marcel' || appStyle === 'Cozy')
+                                        : appStyle === 'Marcel'
                                         ? 'bg-[#F3EFFB] hover:bg-[#EAE4F7] text-[#2F2440] border-[#C4B5E6]'
                                         : 'bg-[#363330] hover:bg-[#45413e] text-[#d6d3d1] border-transparent'
                                 }`}

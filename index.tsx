@@ -12,8 +12,6 @@ import '@fontsource/uncial-antiqua/400.css';
 import '@fontsource/caveat/400.css';
 import '@fontsource/caveat/700.css';
 import '@fontsource/parisienne/400.css';
-import '@fontsource/creepster/400.css';
-import '@fontsource/pacifico/400.css';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';

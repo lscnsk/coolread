@@ -590,7 +590,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
 
   // Pages and comics sit on the style's dark reading background
   const containerClasses = `${
-    appStyle === 'Bimbo' ? 'bg-[#1c0f13]' : appStyle === 'Surf' ? 'bg-[#111e25]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#0d1a33]' : (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'bg-[#1c1412]' : (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'bg-[#1D1410]' : 'bg-[#111111]'
+    appStyle === 'Bimbo' ? 'bg-[#1c0f13]' : appStyle === 'Surf' ? 'bg-[#111e25]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#0d1a33]' : appStyle === 'Dragon' ? 'bg-[#1c1412]' : appStyle === 'Marcel' ? 'bg-[#1D1410]' : 'bg-[#111111]'
   } text-[#fffff0]`;
 
   const comicSrc = isComic ? getComicImageUrl() : '';
@@ -624,8 +624,8 @@ const PDFReader: React.FC<PDFReaderProps> = ({
             <div className={`w-12 h-12 border-4 rounded-full animate-spin ${
                 appStyle === 'Bimbo' ? 'border-pink-200 border-t-pink-600' : 
                 appStyle === 'Surf' ? 'border-sky-200 border-t-sky-600' : 
-                (appStyle === 'Dragon' || appStyle === 'Spooky') ? 'border-orange-200 border-t-orange-600' :
-                (appStyle === 'Marcel' || appStyle === 'Cozy') ? 'border-[#C4B5E6] border-t-[#766594]' :
+                appStyle === 'Dragon' ? 'border-orange-200 border-t-orange-600' :
+                appStyle === 'Marcel' ? 'border-[#C4B5E6] border-t-[#766594]' :
                 (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'border-[#e0d6c1] border-t-[#cca972]' :
                 'border-[#fffff0]/20 border-t-[#fffff0]'
             }`}></div>

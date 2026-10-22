@@ -186,8 +186,8 @@ export const MangaDexView: React.FC<MangaDexViewProps> = ({ source, appStyle = '
     setBulk(null);
   };
 
-  const isBimbo = appStyle === 'Bimbo', isSurf = appStyle === 'Surf', isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky'), isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
+  const isBimbo = appStyle === 'Bimbo', isSurf = appStyle === 'Surf', isMarcel = appStyle === 'Marcel';
+  const isDragon = appStyle === 'Dragon', isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
   const brandClass = isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284C7]' : isDragon ? 'text-[#fcd34d]' : isFF ? 'text-[#dfc894]' : 'text-[#a8a29e]/80';
   const headerBorder = isMarcel ? 'border-[#C4B5E6]/70' : isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isDragon ? 'border-[#7f1d1d]/60' : isFF ? 'border-[#406da3]/50' : 'border-[#45413e]/30';
   const inputClass = isMarcel

@@ -37,7 +37,6 @@ import { CatalogBook, CatalogSeries, CATALOG_SERIES, sortBooksChronologically } 
 import { getStoredCatalogBooks, syncCatalogFromGitHub, downloadCatalogBookFile, buildCatalogSeriesFromBooks } from './utils/catalogSync';
 
 import { parseM4AChapters } from './utils/mp4chapters';
-import { themedIcon } from './utils/themeVariants';
 
 
 function App() {
@@ -330,7 +329,7 @@ function App() {
   const handleAppStyleChange = (style: string) => {
     setAppStyle(style);
     setTitleClickKey(k => k + 1);
-    if (style === 'Bimbo' || style === 'Surf' || style === 'Marcel' || style === 'Cozy') {
+    if (style === 'Bimbo' || style === 'Surf' || style === 'Marcel') {
       setTheme('light');
     } else {
       setTheme('dark');
@@ -765,11 +764,11 @@ function App() {
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isDragon = appStyle === 'Dragon';
+  const isMarcel = appStyle === 'Marcel';
 
   return (
-    <div className={`flex fixed inset-0 w-full bg-[#23211f] text-[#fffff0] font-serif overflow-hidden ${isBimbo ? 'bimbo-mode' : ''} ${isSurf ? 'surf-mode' : ''} ${isFF ? 'ff-mode' : ''} ${isDragon ? 'dragon-mode' : ''} ${isMarcel ? 'marcel-mode' : ''} ${appStyle === 'Spooky' ? 'spooky-mode' : ''} ${appStyle === 'Cozy' ? 'cozy-mode' : ''}`}>
+    <div className={`flex fixed inset-0 w-full bg-[#23211f] text-[#fffff0] font-serif overflow-hidden ${isBimbo ? 'bimbo-mode' : ''} ${isSurf ? 'surf-mode' : ''} ${isFF ? 'ff-mode' : ''} ${isDragon ? 'dragon-mode' : ''} ${isMarcel ? 'marcel-mode' : ''}`}>
       <AppStyles appStyle={appStyle} theme={theme} />
       
       {/* Font Preloader - ensures theme fonts are loaded before settings menu opens */}
@@ -1013,7 +1012,7 @@ function App() {
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center">
                                         <span className="text-[5rem] md:text-[7rem] leading-none select-none opacity-80 emoji" style={{ fontSize: '5rem' }}>
-                                            {themedIcon(appStyle, isMarcel ? '☕' : isBimbo ? '💿' : isSurf ? '🏄' : '💽')}
+                                            {isMarcel ? '☕' : isBimbo ? '💿' : isSurf ? '🏄' : '💽'}
                                         </span>
                                     </div>
                                 )}

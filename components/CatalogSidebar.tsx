@@ -85,8 +85,8 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = React.memo(({
 
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isMarcel = appStyle === 'Marcel';
+  const isDragon = appStyle === 'Dragon';
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
 
   const isRootActive = !activeOpdsId && currentFilter.type === 'all' && !currentFilter.searchQuery && !currentFilter.value;
@@ -565,7 +565,7 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = React.memo(({
             })}
 
             {/* Catalogs added by the user: OPDS libraries and sites */}
-            <li className="pt-3 mt-2 border-t select-none" style={{ borderColor: isBimbo ? '#FBCFE8' : isSurf ? '#BAE6FD' : isMarcel ? (appStyle === 'Cozy' ? '#D9C3A5' : '#C4B5E6') : 'rgba(69,65,62,0.5)' }}>
+            <li className="pt-3 mt-2 border-t select-none" style={{ borderColor: isBimbo ? '#FBCFE8' : isSurf ? '#BAE6FD' : isMarcel ? '#C4B5E6' : 'rgba(69,65,62,0.5)' }}>
               <ul className="space-y-1">
                 {opdsSources.map(src => {
                   const isActive = activeOpdsId === src.id;

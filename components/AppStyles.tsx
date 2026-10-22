@@ -1,5 +1,4 @@
 import React from 'react';
-import { cozyCss, spookyCss } from './themeVariantStyles';
 
 interface AppStylesProps {
   appStyle: string;
@@ -9,9 +8,9 @@ interface AppStylesProps {
 export function AppStyles({ appStyle, theme }: AppStylesProps) {
   const isBimbo = appStyle === 'Bimbo';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isDragon = appStyle === 'Dragon';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isMarcel = appStyle === 'Marcel';
 
   const isDarkBimbo = isBimbo && theme === 'dark';
   const isDarkSurf = isSurf && theme === 'dark';
@@ -375,13 +374,6 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           .marcel-mode .bimbo-reader-canvas .hover\\:text-\\[\\#fffff0\\]:hover { color: #F4EBE1 !important; }
         `}</style>
       )}
-      {/* Spooky and Cozy recolor Dragon and Marcel; they must come after those blocks */}
-      {appStyle === 'Spooky' && <style>{spookyCss + `
-          .spooky-mode .font-dragon { font-family: 'Creepster', cursive !important; letter-spacing: 0.04em; }
-      `}</style>}
-      {appStyle === 'Cozy' && <style>{cozyCss + `
-          .cozy-mode .font-marcel { font-family: 'Pacifico', cursive !important; font-weight: 400 !important; }
-      `}</style>}
     </>
   );
 }

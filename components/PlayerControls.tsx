@@ -34,8 +34,8 @@ interface PlayerControlsProps {
 
 /** One palette per style: accent (play button, played part, thumbs), track, controls, text, labels, ruler, icon on the play button */
 export function playerPalette(appStyle?: string) {
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy'), isBimbo = appStyle === 'Bimbo', isSurf = appStyle === 'Surf';
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky'), isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
+  const isMarcel = appStyle === 'Marcel', isBimbo = appStyle === 'Bimbo', isSurf = appStyle === 'Surf';
+  const isDragon = appStyle === 'Dragon', isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
   return isMarcel
     ? { accent: '#544372', track: '#C4B5E6', control: '#544372', text: '#2F2440', label: '#766594', ruler: '#AC97D7', onAccent: '#F3EFFB' }
     : isBimbo
@@ -70,7 +70,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isMarcel = appStyle === 'Marcel';
   
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSeek(parseFloat(e.target.value));

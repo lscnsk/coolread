@@ -55,12 +55,12 @@ const EBookControls: React.FC<EBookControlsProps> = ({
 }) => {
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isMarcel = appStyle === 'Marcel';
+  const isDragon = appStyle === 'Dragon';
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
   const readAloud = useReadAloud();
   const canReadAloud = currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && !isRsvpMode;
-  const accentColor = appStyle === 'Cozy' ? '#9A5B22' : isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFF ? '#cca972' : '#fffff0';
+  const accentColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFF ? '#cca972' : '#fffff0';
 
   const adjustFont = (delta: number) => {
       setFontSize(Math.max(0.5, Math.min(3.0, fontSize + delta)));

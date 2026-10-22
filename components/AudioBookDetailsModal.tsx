@@ -27,9 +27,9 @@ export const AudioBookDetailsModal: React.FC<AudioBookDetailsModalProps> = ({
 
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
-  const isMarcel = (appStyle === 'Marcel' || appStyle === 'Cozy');
+  const isMarcel = appStyle === 'Marcel';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
-  const isDragon = (appStyle === 'Dragon' || appStyle === 'Spooky');
+  const isDragon = appStyle === 'Dragon';
 
   useEffect(() => {
     if (isOpen) {
