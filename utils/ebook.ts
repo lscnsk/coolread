@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { Book, Chapter } from '../types';
+import { generatedCoverUrl } from './coverArt';
 
 // Helper to create the cover chapter
 const createCoverChapter = (title: string, author: string, coverUrl?: string): Chapter => {
@@ -280,6 +281,7 @@ export const parseFb2 = async (file: Blob, bookId: string): Promise<Partial<Book
   // --- 2. PARSE CHAPTERS ---
   const chapters: Chapter[] = [];
   
+  if (!coverUrl) coverUrl = await generatedCoverUrl(title, author);
   chapters.push(createCoverChapter(title, author, coverUrl));
 
   const getSectionLevel = (sec: Element): number => {
@@ -548,7 +550,8 @@ export const parseEpub = async (file: Blob, bookId: string): Promise<Partial<Boo
     }
     const spineItems = Array.from(opfDoc.querySelectorAll("spine itemref"));
     const chapters: Chapter[] = [];
-    chapters.push(createCoverChapter(title, author, coverUrl));
+    if (!coverUrl) coverUrl = await generatedCoverUrl(title, author);
+  chapters.push(createCoverChapter(title, author, coverUrl));
 
     const parsedDocsCache = new Map<string, Document>();
     const epubNotesMap = new Map<string, string>();

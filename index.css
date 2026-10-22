@@ -783,6 +783,15 @@ mark.search-highlight {
   height: auto !important;
 }
 
+/* Scroll mode: a smaller cover leaves room for the Continue button above the bottom panel */
+.reader-content.cover-scroll .book-cover-page {
+  min-height: 0 !important;
+}
+.reader-content.cover-scroll .book-cover-page img,
+.reader-content.cover-scroll .book-cover-page .book-cover-image {
+  max-height: calc(100vh - 380px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+}
+
 .paged-content .book-cover-page img,
 .paged-content .book-cover-page .book-cover-image {
   max-height: calc(100vh - 300px) !important;

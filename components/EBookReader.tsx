@@ -4832,7 +4832,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                         ref={contentRef}
                         lang="ru"
                         onClick={handleContentInteract}
-                        className={`reader-content ${fontSize > 0.9 ? 'reader-large-font' : ''} ${isNotesPage ? 'is-notes-chapter' : ''} prose ${theme === 'light' ? 'prose-stone' : 'prose-invert'} prose-lg max-w-none [&>img]:mx-auto [&>img]:max-w-full [&>img]:h-auto [&>img]:block`}
+                        className={`reader-content ${isCoverPage && !isPagedMode ? 'cover-scroll' : ''} ${fontSize > 0.9 ? 'reader-large-font' : ''} ${isNotesPage ? 'is-notes-chapter' : ''} prose ${theme === 'light' ? 'prose-stone' : 'prose-invert'} prose-lg max-w-none [&>img]:mx-auto [&>img]:max-w-full [&>img]:h-auto [&>img]:block`}
                         style={{
                             fontSize: isCoverPage ? '1rem' : (isNotesPage ? '0.95rem' : `${fontSize}rem`),
                             lineHeight: isCoverPage ? '1.4' : (isNotesPage ? '1.55' : '1.6'),
@@ -4850,8 +4850,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                     {/* End of Chapter Line (Replaces Text for scroll mode) */}
                     {!isPagedMode && (
                         propChapterIndex < book.chapters.length - 1 ? (
-                             <div className={`w-full flex flex-col items-center justify-center ${isCoverPage ? 'pb-10 pt-10 mt-6' : 'pt-6 pb-8 mt-1'}`}>
-                                 <hr className={`w-16 border-t-2 opacity-25 ${isCoverPage ? 'mb-6' : 'mb-10'} ${hrClasses}`} />
+                             <div className={`w-full flex flex-col items-center justify-center ${isCoverPage ? 'pb-10 pt-2' : 'pt-6 pb-8 mt-1'}`}>
+                                 <hr className={`w-16 border-t-2 opacity-25 ${isCoverPage ? 'mb-4' : 'mb-10'} ${hrClasses}`} />
                                  
                                  <button
                                     onClick={(e) => {

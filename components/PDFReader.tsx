@@ -33,6 +33,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   currentChapterIndex,
   theme,
   appStyle,
+  uiVisible,
   onToggleUI,
   onProgressUpdate,
   onChapterChange,
@@ -598,6 +599,10 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   const isVerticallyOverflown = isComic && imageSize && imageSize.width > 0 && 
     (imageSize.height * (Math.min(dimensions.width || window.innerWidth, 768) / imageSize.width)) > (dimensions.height || window.innerHeight);
 
+  // With the panels open, center the page in the space between them, not on the whole screen
+  // (top bar 80px, bottom bar 112px)
+  const panelShift = uiVisible && scale <= 1.0 && !isVerticallyOverflown ? (80 - 112) / 2 : 0;
+
   const containerFlexClasses = isComic
     ? `flex-1 relative w-full h-full flex flex-col items-center ${isVerticallyOverflown ? 'justify-start pt-4 pb-24' : 'justify-center'} transition-colors duration-300 select-none ${containerClasses}`
     : `flex-1 relative w-full h-full flex items-center justify-center transition-colors duration-300 ${containerClasses}`;
@@ -635,7 +640,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
         <div 
           className="relative max-w-full flex items-center justify-center pointer-events-auto"
           style={{
-            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transform: `translate(${offset.x}px, ${offset.y + panelShift}px) scale(${scale})`,
             transformOrigin: 'center center',
             width: '100%',
             height: isComic ? 'auto' : '100%',
