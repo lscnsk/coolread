@@ -43,6 +43,8 @@ export interface OpdsFeed {
   nextUrl?: string;
   searchTemplate?: string;
   openSearchUrl?: string;
+  // Placeholder of the search box, when the catalog searches in its own way
+  searchHint?: string;
 }
 
 const STORAGE_KEY = 'cool_read_opds_sources';
@@ -59,18 +61,22 @@ const PRESET_SOURCES: OpdsSource[] = String(import.meta.env.VITE_OPDS_PRESET || 
   .map(s => s.trim())
   .flatMap(name => (name === 'flibusta' ? [FLIBUSTA_SOURCE] : name === 'mangadex' ? [MANGADEX_SOURCE] : []));
 
-// Sites whose pages the built-in browser turns into fb2 books (📥). Added once; the user can delete them.
+// az.lib.ru and Wikisource searched like OPDS catalogs; their books are built into fb2 (utils/webCatalog.ts).
+// Added once; the user can delete them.
 const BOOK_SITES: OpdsSource[] = [
-  { id: 'site_preset_azlib', title: 'az.lib.ru', url: 'http://az.lib.ru/', kind: 'site' },
-  { id: 'site_preset_wikisource', title: 'wikisource', url: 'https://ru.wikisource.org/', kind: 'site' },
+  { id: 'web_preset_azlib', title: 'az.lib.ru', url: 'coolread-web:azlib' },
+  { id: 'web_preset_wikisource', title: 'wikisource', url: 'coolread-web:wikisource' },
 ];
-const BOOK_SITES_KEY = 'cool_read_book_sites_added';
+const BOOK_SITES_KEY = 'cool_read_book_catalogs_added';
+// An earlier test build added the two sites as web pages for the browser
+const OLD_SITE_IDS = ['site_preset_azlib', 'site_preset_wikisource'];
 
 async function addBookSitesOnce(sources: OpdsSource[]): Promise<OpdsSource[]> {
   const get = async () => (isNative ? (await Preferences.get({ key: BOOK_SITES_KEY })).value : localStorage.getItem(BOOK_SITES_KEY));
   if (await get()) return sources;
-  const missing = BOOK_SITES.filter(b => !sources.some(s => s.id === b.id || s.url.replace(/^https?:\/\//, '').startsWith(b.url.replace(/^https?:\/\//, ''))));
-  const next = [...sources, ...missing];
+  const kept = sources.filter(s => !OLD_SITE_IDS.includes(s.id));
+  const missing = BOOK_SITES.filter(b => !kept.some(s => s.id === b.id || s.url === b.url));
+  const next = [...kept, ...missing];
   await saveOpdsSources(next);
   try {
     if (isNative) await Preferences.set({ key: BOOK_SITES_KEY, value: '1' });
@@ -285,6 +291,8 @@ export function parseOpdsFeed(xml: string, url: string): OpdsFeed {
 }
 
 export async function fetchOpdsFeed(url: string, source?: OpdsSource): Promise<OpdsFeed> {
+  // az.lib.ru and Wikisource: catalogs built from the sites' own pages
+  if (url.startsWith('coolread-web:')) return (await import('./webCatalog')).fetchWebCatalogFeed(url);
   const res = await httpGet(url, source, false);
   if (res.status === 401 || res.status === 403) throw new Error('auth');
   if (res.status >= 400) throw new Error(`http-${res.status}`);
@@ -344,6 +352,13 @@ const safeName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g,
 
 /** Downloads a book and returns a File the library import understands (zips are unpacked). */
 export async function downloadOpdsBook(entry: OpdsEntry, format: string, link: OpdsLink, source?: OpdsSource): Promise<File> {
+  if (source?.url.startsWith('coolread-web:')) {
+    try {
+      return await (await import('./webBook')).webPageToFb2(link.href);
+    } catch (e: any) {
+      throw new Error('web:' + (e?.message || 'Download failed'));
+    }
+  }
   const res = await httpGet(link.href, source, true);
   if (res.status === 401 || res.status === 403) throw new Error('auth');
   if (res.status >= 400 || !res.blob) throw new Error(`http-${res.status}`);
@@ -371,6 +386,7 @@ export async function downloadOpdsBook(entry: OpdsEntry, format: string, link: O
 
 export function opdsErrorText(e: any): string {
   const m = String(e?.message || e || '');
+  if (m.startsWith('web:')) return m.slice(4);
   if (m === 'auth') return 'Login required';
   if (m === 'not-opds') return 'Not an OPDS catalog';
   if (m === 'not-a-book' || m === 'empty-zip') return 'Download failed';

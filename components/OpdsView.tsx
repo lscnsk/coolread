@@ -201,7 +201,7 @@ export const OpdsView: React.FC<OpdsViewProps> = ({ source, appStyle = 'Cool', o
             enterKeyHint="search"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="search for a book"
+            placeholder={stack[0]?.feed.searchHint || 'search for a book'}
             className={`flex-1 min-w-0 border rounded px-3 py-2 text-sm focus:outline-none ${inputClass}`}
           />
         </form>

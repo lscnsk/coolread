@@ -2,13 +2,15 @@
 // and for fb2/epub files without a cover picture.
 
 /** Title page picture: a double frame, the title in capitals at the top, the author at the bottom. */
-export async function drawCover(title: string, author: string): Promise<{ base64: string; type: string } | undefined> {
+export async function drawCover(title: string, author: string, scale = 1): Promise<{ base64: string; type: string } | undefined> {
   try {
     const W = 1000, H = 1414;
     const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
+    // The picture is laid out at full size; a smaller scale only makes a smaller image (list thumbnails)
+    canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
     const g = canvas.getContext('2d');
     if (!g) return undefined;
+    g.scale(scale, scale);
     const serif = "Literata, Georgia, 'Times New Roman', serif";
     try {
       // The font comes in pieces by alphabet: ask for the cover's own letters, or only the Latin piece loads
@@ -59,7 +61,7 @@ export async function drawCover(title: string, author: string): Promise<{ base64
 }
 
 /** The generated cover as a data: URL, or undefined where canvas is not available. */
-export async function generatedCoverUrl(title: string, author: string): Promise<string | undefined> {
-  const c = await drawCover(title, author);
+export async function generatedCoverUrl(title: string, author: string, scale = 1): Promise<string | undefined> {
+  const c = await drawCover(title, author, scale);
   return c ? `data:${c.type};base64,${c.base64}` : undefined;
 }

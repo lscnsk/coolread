@@ -385,16 +385,22 @@ const hasContent = (s: Section): boolean => {
 
 // ---------- Fetching ----------
 
-async function fetchHtml(url: string): Promise<string> {
+export async function fetchHtml(url: string): Promise<string> {
   const res = await httpGet(url, undefined, true, { Accept: 'text/html,*/*;q=0.8' }, { timeoutMs: 60000, sameProtocol: true });
   if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.blob!.arrayBuffer());
   const head = new TextDecoder('latin1').decode(bytes.slice(0, 2048)).toLowerCase();
-  const cs = (res.contentType.match(/charset=([\w-]+)/i)?.[1] || head.match(/charset=["']?([\w-]+)/)?.[1] || 'utf-8').toLowerCase();
+  const declared = (res.contentType.match(/charset=([\w-]+)/i)?.[1] || head.match(/charset=["']?([\w-]+)/)?.[1] || '').toLowerCase();
+  if (declared) {
+    try {
+      return new TextDecoder(declared === 'cp1251' ? 'windows-1251' : declared).decode(bytes);
+    } catch {}
+  }
+  // No charset given (az.lib.ru lists often have none): UTF-8 if it is valid, otherwise the old Russian encoding
   try {
-    return new TextDecoder(cs === 'cp1251' ? 'windows-1251' : cs).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    return new TextDecoder('utf-8').decode(bytes);
+    return new TextDecoder('windows-1251').decode(bytes);
   }
 }
 
