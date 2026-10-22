@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CoolRead</string>
+    <string name="title_activity_main">CoolRead</string>
+    <string name="package_name">com.coolread.app</string>
+    <string name="custom_url_scheme">com.coolread.app</string>
+    <string name="playback_channel">Player</string>
+    <string name="playback_play">Play</string>
+    <string name="playback_pause">Pause</string>
+    <string name="playback_back">Back</string>
+    <string name="playback_forward">Forward</string>
+</resources>

@@ -1,0 +1,4972 @@
+import { useRsvp } from '../hooks/useRsvp';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Book } from '../types';
+import { ChevronLeft, ChevronRight, Play, Pause, ZoomIn, ZoomOut, Plus, Minus, SkipForward } from 'lucide-react';
+import { getFontFamilyCSS } from '../utils/fonts';
+import { registerReader } from '../utils/readAloud';
+import { accentOf, coverData } from '../utils/nowPlaying';
+// @ts-ignore
+import Hypher from 'hypher';
+// @ts-ignore
+import ruPattern from 'hyphenation.ru';
+
+function shouldSkipBionic(node: Node): boolean {
+  let parent = node.parentNode;
+  while (parent && parent.nodeName !== 'BODY') {
+    const name = parent.nodeName.toLowerCase();
+    if (
+      name === 'pre' || 
+      name === 'code' || 
+      name === 'script' || 
+      name === 'style' || 
+      name === 'svg' || 
+      name === 'b' || 
+      name === 'strong' ||
+      name === 'sup' ||
+      name === 'sub' ||
+      name === 'h1' ||
+      name === 'h2' ||
+      name === 'h3' ||
+      name === 'h4' ||
+      name === 'h5' ||
+      name === 'h6'
+    ) {
+      return true;
+    }
+    if (
+      parent.nodeType === Node.ELEMENT_NODE &&
+      ((parent as Element).classList.contains('dash-word-lead') ||
+       (parent as Element).classList.contains('dash-fixed') ||
+       (parent as Element).classList.contains('dash-space') ||
+       (parent as Element).classList.contains('punct-tight') ||
+       (parent as Element).classList.contains('footnote-italic') ||
+       (parent as Element).classList.contains('note-link') ||
+       (parent as Element).classList.contains('note-back-link') ||
+       (parent as Element).classList.contains('note-entry'))
+    ) {
+      return true;
+    }
+    parent = parent.parentNode;
+  }
+  return false;
+}
+
+export function getBionicBoldLength(length: number): number {
+  if (length <= 1) return 1;
+  if (length <= 3) return 1;
+  if (length <= 5) return 2;
+  if (length <= 7) return 3;
+  if (length <= 9) return 4;
+  return Math.ceil(length * 0.4);
+}
+
+function getSearchHighlightColors(style?: string, th?: 'dark' | 'light') {
+  if (style === 'Bimbo') {
+    return {
+      bg: th === 'dark' ? 'rgba(244, 63, 94, 0.45)' : 'rgba(251, 113, 133, 0.38)',
+      outline: '#e11d48',
+    };
+  }
+  if (style === 'Surf') {
+    return {
+      bg: th === 'dark' ? 'rgba(14, 165, 233, 0.45)' : 'rgba(56, 189, 248, 0.38)',
+      outline: '#0284c7',
+    };
+  }
+  if (style === 'Dragon') {
+    return {
+      bg: th === 'dark' ? 'rgba(249, 115, 22, 0.45)' : 'rgba(251, 146, 60, 0.40)',
+      outline: '#ea580c',
+    };
+  }
+  if (style === 'Marcel') {
+    return {
+      bg: th === 'dark' ? 'rgba(168, 85, 247, 0.45)' : 'rgba(192, 132, 252, 0.38)',
+      outline: '#9333ea',
+    };
+  }
+  if (style === 'Final' || style === 'Final Fantasy') {
+    return {
+      bg: th === 'dark' ? 'rgba(234, 179, 8, 0.45)' : 'rgba(250, 204, 21, 0.38)',
+      outline: '#ca8a04',
+    };
+  }
+  return {
+    bg: th === 'dark' ? 'rgba(245, 158, 11, 0.45)' : 'rgba(251, 191, 36, 0.38)',
+    outline: th === 'dark' ? '#f59e0b' : '#d97706',
+  };
+}
+
+function createBionicFragment(text: string, document: Document): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  // Include soft hyphen (\xad) character in the word regex so hyphenated word syllables are matched as part of a single word
+  const wordRegex = /[\p{L}\p{N}\xad]+/gu;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = wordRegex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    const word = match[0];
+
+    if (matchIndex > lastIndex) {
+      fragment.appendChild(document.createTextNode(text.substring(lastIndex, matchIndex)));
+    }
+
+    // Count physical characters (ignoring soft hyphens) to determine split point
+    let realLen = 0;
+    for (let i = 0; i < word.length; i++) {
+      if (word.charCodeAt(i) !== 173) {
+        realLen++;
+      }
+    }
+
+    let boldPart = "";
+    let regularPart = "";
+
+    if (realLen === 0) {
+      regularPart = word;
+    } else {
+      const boldLen = getBionicBoldLength(realLen);
+      let boldCharCount = 0;
+      let splitIndex = 0;
+      for (let i = 0; i < word.length; i++) {
+        if (word.charCodeAt(i) !== 173) {
+          boldCharCount++;
+        }
+        if (boldCharCount === boldLen) {
+          splitIndex = i + 1;
+          break;
+        }
+      }
+      boldPart = word.substring(0, splitIndex);
+      regularPart = word.substring(splitIndex);
+    }
+
+    if (boldPart) {
+      const b = document.createElement('b');
+      b.className = 'font-bold';
+      b.textContent = boldPart;
+      fragment.appendChild(b);
+    }
+
+    if (regularPart) {
+      fragment.appendChild(document.createTextNode(regularPart));
+    }
+
+    lastIndex = wordRegex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+  }
+
+  return fragment;
+}
+
+let moduleHyphenator: any = null;
+function getHyphenator() {
+  if (!moduleHyphenator) {
+    try {
+      moduleHyphenator = new Hypher(ruPattern);
+    } catch (e) {
+      console.error("Error initializing Hypher:", e);
+    }
+  }
+  return moduleHyphenator;
+}
+
+/** Chapters longer than this (characters) show the spinner before they are laid out. */
+const HEAVY_CHAPTER = 40000;
+
+function transformChapterContent(
+  rawContent: string,
+  isCoverPage: boolean,
+  isBionic: boolean,
+  isRsvpMode: boolean,
+  isStyledMode: boolean = false
+): string {
+  if (!rawContent) return "";
+  if (isCoverPage) {
+    return rawContent
+      .replace(/<p class="book-cover-author"/gi, '<div class="book-cover-author"')
+      .replace(/<h2 class="book-cover-author"/gi, '<div class="book-cover-author"')
+      .replace(/<h1 class="book-cover-title"/gi, '<div class="book-cover-title"');
+  }
+
+  const parser = new DOMParser();
+  let prepared = rawContent
+    .replace(/<(?:[a-zA-Z0-9]+:)?title([^>]*)>/gi, '<div class="title">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?title>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?subtitle([^>]*)>/gi, '<div class="subtitle">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?subtitle>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?epigraph([^>]*)>/gi, '<div class="epigraph">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?epigraph>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?cite([^>]*)>/gi, '<blockquote class="cite">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?cite>/gi, '</blockquote>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?annotation([^>]*)>/gi, '<div class="annotation">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?annotation>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?poem([^>]*)>/gi, '<div class="poem">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?poem>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?stanza([^>]*)>/gi, '<div class="stanza">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?stanza>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?v([^>]*)>/gi, '<p class="verse">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?v>/gi, '</p>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?text-author([^>]*)>/gi, '<div class="text-author">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?text-author>/gi, '</div>')
+    .replace(/<(?:[a-zA-Z0-9]+:)?date([^>]*)>/gi, '<div class="date">')
+    .replace(/<\/(?:[a-zA-Z0-9]+:)?date>/gi, '</div>');
+
+  const doc = parser.parseFromString(prepared, 'text/html');
+
+  // 1. Convert FB2 <emphasis> to <em>
+  const emphasisNodes = doc.querySelectorAll('emphasis');
+  emphasisNodes.forEach(node => {
+    const em = doc.createElement('em');
+    em.innerHTML = node.innerHTML;
+    node.parentNode?.replaceChild(em, node);
+  });
+
+  // 1.5. Include adjacent quotes and punctuation inside italic/bold elements
+  try {
+    const formatElements = doc.querySelectorAll('em, i, strong, b');
+    formatElements.forEach(el => {
+      const prev = el.previousSibling;
+      if (prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue) {
+        // Quotes and dashes preceding italic/bold
+        const match = prev.nodeValue.match(/([«„“"'\(\[]+|(?:\s+|^)[—–-]+)$/);
+        if (match) {
+          const matchedText = match[1].trimStart();
+          prev.nodeValue = prev.nodeValue.slice(0, -matchedText.length);
+          el.insertBefore(doc.createTextNode(matchedText), el.firstChild);
+        }
+      }
+      const next = el.nextSibling;
+      if (next && next.nodeType === Node.TEXT_NODE && next.nodeValue) {
+        const match = next.nodeValue.match(/^([»”"'\)\]\.,:;!?…—–-]+)/);
+        if (match) {
+          const punctText = match[1];
+          next.nodeValue = next.nodeValue.slice(punctText.length);
+          el.appendChild(doc.createTextNode(punctText));
+        }
+      }
+    });
+  } catch (e) {}
+
+  // 1.6. Italicize footnote numbers in square brackets (e.g. [1], [*]) adjacent to or inside italic elements (em, i)
+  try {
+    const isFootnoteElement = (node: Node | null): boolean => {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+      
+      if (tag === 'sup' || tag === 'sub') return true;
+      if (el.querySelector('sup') || el.closest('sup')) return true;
+
+      if (tag === 'a') {
+        const href = el.getAttribute('href') || el.getAttribute('l:href') || el.getAttribute('xlink:href') || '';
+        const id = el.getAttribute('id') || '';
+        const epubType = el.getAttribute('epub:type') || '';
+        const role = el.getAttribute('role') || '';
+        const type = el.getAttribute('type') || '';
+        
+        if (epubType === 'noteref' || role === 'doc-noteref' || type === 'note') return true;
+        if (/#(?:note|fn|ref|footnote|cite)/i.test(href)) return true;
+        if (/^(?:ref|note|fn)/i.test(id)) return true;
+        if (el.classList.contains('note-link') || el.classList.contains('noteref') || el.classList.contains('footnote')) return true;
+      }
+      
+      if (el.classList.contains('footnote') || el.classList.contains('note-ref') || el.classList.contains('noteref')) return true;
+
+      const text = (el.textContent || '').trim();
+      if (/^\[[\s\d\*\u0400-\u04ff\w\.\-–—]+\]$/iu.test(text)) {
+        return true;
+      }
+      if (tag === 'a' && (/^\d+$/.test(text) || /^\*+$/.test(text))) {
+        return true;
+      }
+
+      return false;
+    };
+
+    const makeFootnoteItalic = (elem: HTMLElement) => {
+      elem.classList.add('footnote-italic');
+      elem.style.setProperty('font-style', 'italic', 'important');
+      
+      const children = elem.querySelectorAll('*');
+      children.forEach(ch => {
+        (ch as HTMLElement).classList.add('footnote-italic');
+        (ch as HTMLElement).style.setProperty('font-style', 'italic', 'important');
+      });
+
+      const walker = doc.createTreeWalker(elem, NodeFilter.SHOW_TEXT, null);
+      const textNodes: Text[] = [];
+      let tNode: Node | null;
+      while (tNode = walker.nextNode()) {
+        if (tNode.nodeValue && tNode.nodeValue.trim()) {
+          if (!tNode.parentElement?.closest('em, i')) {
+            textNodes.push(tNode as Text);
+          }
+        }
+      }
+      for (const tn of textNodes) {
+        const emWrapper = doc.createElement('em');
+        emWrapper.className = 'footnote-italic';
+        emWrapper.setAttribute('style', 'font-style: italic !important;');
+        emWrapper.textContent = tn.nodeValue;
+        tn.parentNode?.replaceChild(emWrapper, tn);
+      }
+    };
+
+    const fnBracketRegex = /^([\s\u00A0\u202F]*(?:[,;:.]\s*)?)(\[(?:\*+|\d+|[a-zа-яёivxlcdm]+|\d+[-–—\.\s]*\d*|\d+[а-яёa-z]?|(?:прим|комм|сноска|ред|автор|note)\.?\s*\d*)\])/iu;
+    const prevFnBracketRegex = /(\[(?:\*+|\d+|[a-zа-яёivxlcdm]+|\d+[-–—\.\s]*\d*|\d+[а-яёa-z]?|(?:прим|комм|сноска|ред|автор|note)\.?\s*\d*)\])([\s\u00A0\u202F]*(?:[,;:.]\s*)?)$/iu;
+
+    const italicElements = Array.from(doc.querySelectorAll('em, i, .italic, [style*="font-style: italic"], [style*="font-style:italic"]'));
+    italicElements.forEach(el => {
+      // 1. Check footnotes inside this italic element
+      const innerFootnotes = el.querySelectorAll('a, sup, span');
+      innerFootnotes.forEach(inner => {
+        if (isFootnoteElement(inner)) {
+          makeFootnoteItalic(inner as HTMLElement);
+        }
+      });
+
+      // 2. Check footnotes following this italic element (next siblings)
+      let next = el.nextSibling;
+      let hadFootnote = false;
+      while (next) {
+        if (next.nodeType === Node.TEXT_NODE) {
+          const text = next.nodeValue || '';
+          const match = text.match(fnBracketRegex);
+          // Punctuation right after the footnote is italic too, as it would be right after the word
+          const punct = hadFootnote && !match ? text.match(/^[»”"'\)\]\.,:;!?…]+/) : null;
+          if (punct) {
+            const pEm = doc.createElement('em');
+            pEm.className = 'footnote-italic';
+            pEm.setAttribute('style', 'font-style: italic !important;');
+            pEm.textContent = punct[0];
+            next.parentNode?.insertBefore(pEm, next);
+            next.nodeValue = text.slice(punct[0].length);
+            break;
+          }
+          if (match) {
+            hadFootnote = true;
+            const sep = match[1];
+            const fnText = match[2];
+            next.nodeValue = text.slice(match[0].length);
+            const parent = next.parentNode;
+            if (sep) {
+              parent?.insertBefore(doc.createTextNode(sep), next);
+            }
+            const fnEm = doc.createElement('em');
+            fnEm.className = 'footnote-italic';
+            fnEm.setAttribute('style', 'font-style: italic !important;');
+            fnEm.textContent = fnText;
+            parent?.insertBefore(fnEm, next);
+            continue;
+          } else if (!text.trim() && next.nextSibling && isFootnoteElement(next.nextSibling)) {
+            next = next.nextSibling;
+            continue;
+          } else {
+            break;
+          }
+        } else if (next.nodeType === Node.ELEMENT_NODE) {
+          if (isFootnoteElement(next)) {
+            makeFootnoteItalic(next as HTMLElement);
+            hadFootnote = true;
+            next = next.nextSibling;
+            continue;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+
+      // 3. Check footnotes preceding this italic element (previous siblings)
+      let prev = el.previousSibling;
+      while (prev) {
+        if (prev.nodeType === Node.TEXT_NODE) {
+          const text = prev.nodeValue || '';
+          const match = text.match(prevFnBracketRegex);
+          if (match) {
+            const fnText = match[1];
+            const sep = match[2];
+            prev.nodeValue = text.slice(0, -match[0].length);
+            const parent = prev.parentNode;
+            const fnEm = doc.createElement('em');
+            fnEm.className = 'footnote-italic';
+            fnEm.setAttribute('style', 'font-style: italic !important;');
+            fnEm.textContent = fnText;
+            const nextNode = prev.nextSibling;
+            parent?.insertBefore(fnEm, nextNode);
+            if (sep) {
+              parent?.insertBefore(doc.createTextNode(sep), nextNode);
+            }
+            continue;
+          } else if (!text.trim() && prev.previousSibling && isFootnoteElement(prev.previousSibling)) {
+            prev = prev.previousSibling;
+            continue;
+          } else {
+            break;
+          }
+        } else if (prev.nodeType === Node.ELEMENT_NODE) {
+          if (isFootnoteElement(prev)) {
+            makeFootnoteItalic(prev as HTMLElement);
+            prev = prev.previousSibling;
+            continue;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+    });
+  } catch (e) {}
+
+  // 1.8. Normalize horizontal bars, em-dashes, and styled mode typography (ё -> е, т. д. -> т.д.)
+  try {
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+    let n: Node | null;
+    while (n = walker.nextNode()) {
+      if (n.nodeValue) {
+        let val = n.nodeValue;
+        if (/[\u2014\u2015]/.test(val)) {
+          val = val.replace(/[\u2014\u2015]/g, '—');
+        }
+        if (isStyledMode) {
+          // Replace ё/Ё with е/Е
+          if (/[ёЁ]/.test(val)) {
+            val = val.replace(/ё/g, 'е').replace(/Ё/g, 'Е');
+          }
+          // Compress standard multi-token abbreviations into unbroken forms:
+          // т. д. -> т.д., т. п. -> т.п., т. е. -> т.е., т. к. -> т.к., в т. ч. -> в т.ч., и т. д. -> и т.д.
+          val = val
+            .replace(/([иИ])\.[ \t\u00A0\u202F]+([тТ])\.[ \t\u00A0\u202F]+([дД])\./gu, '$1.$2.$3.')
+            .replace(/([иИ])\.[ \t\u00A0\u202F]+([тТ])\.[ \t\u00A0\u202F]+([пП])\./gu, '$1.$2.$3.')
+            .replace(/(?:([вВ])[ \t\u00A0\u202F]+[тТ]\.[ \t\u00A0\u202F]*[чЧ]\.|([вВ])\.[ \t\u00A0\u202F]+[тТ]\.[ \t\u00A0\u202F]+[чЧ]\.)/gu, (_m, g1, g2) => ((g1 || g2) === 'В' ? 'В т.ч.' : 'в т.ч.'))
+            .replace(/([тТ])\.[ \t\u00A0\u202F]+([дД])\./gu, '$1.$2.')
+            .replace(/([тТ])\.[ \t\u00A0\u202F]+([пП])\./gu, '$1.$2.')
+            .replace(/([тТ])\.[ \t\u00A0\u202F]+([еЕ])\./gu, '$1.$2.')
+            .replace(/([тТ])\.[ \t\u00A0\u202F]+([кК])\./gu, '$1.$2.');
+        }
+        n.nodeValue = val;
+      }
+    }
+  } catch (e) {}
+
+  // 2. Hyphenate
+  const hyp = getHyphenator();
+  if (hyp) {
+    try {
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+      let node;
+      while (node = walker.nextNode()) {
+        try {
+          if (node.nodeValue && node.nodeValue.length > 4) {
+            node.nodeValue = hyp.hyphenateText(node.nodeValue);
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  // 3. Clear leaked styles and normalize tables
+  const tables = doc.querySelectorAll('table');
+  tables.forEach(table => {
+    table.style.fontStyle = 'normal';
+    table.style.textIndent = '0px';
+
+    // Clear first-line indent on all elements inside tables
+    const allTableElements = table.querySelectorAll('p, div, span, td, th, tr, strong, em, b, i, a, li');
+    allTableElements.forEach(el => {
+      el.classList.add('no-indent');
+      (el as HTMLElement).style.textIndent = '0px';
+    });
+
+    // Ensure the table is wrapped in a responsive scrollable container
+    const parent = table.parentElement;
+    if (!parent || !parent.classList.contains('table-scroll-wrapper')) {
+      const wrapper = doc.createElement('div');
+      wrapper.className = 'table-scroll-wrapper';
+      wrapper.style.overflowX = 'auto';
+      wrapper.style.maxWidth = '100%';
+      wrapper.style.width = '100%';
+      wrapper.style.textIndent = '0px';
+      if (parent) {
+        parent.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      }
+    }
+
+    let next = (table.closest('.table-scroll-wrapper') || table).nextElementSibling;
+    while (next) {
+      if (/^(p|div|h[1-6])$/i.test(next.tagName)) {
+        const firstChild = next.firstElementChild;
+        if (firstChild && /^(em|i)$/i.test(firstChild.tagName)) {
+          if (next.children.length === 1 && next.textContent === firstChild.textContent) {
+            const textNode = doc.createElement('span');
+            textNode.innerHTML = firstChild.innerHTML;
+            next.replaceChild(textNode, firstChild);
+          }
+        }
+      }
+      next = next.nextElementSibling;
+    }
+  });
+
+  // 3.1. Normalize bulleted list paragraphs (FB2/EPUB books often format bullet lists as <p>• item</p>)
+  try {
+    const bulletRegex = /^[\s\u00A0\u202F]*[•●▪▫◆◇◦\u2022\u25E6\u25AA\u25CF\u25CB\u25C6\u25C7\u25AB\u2043\u2219\u00B7]\s*/u;
+    const isBulletParagraph = (el: Element | null): boolean => {
+      if (!el || el.tagName.toLowerCase() !== 'p') return false;
+      const text = (el.textContent || '').trim();
+      return bulletRegex.test(text);
+    };
+
+    const paragraphs = Array.from(doc.querySelectorAll('p'));
+    const processed = new Set<Element>();
+
+    for (const p of paragraphs) {
+      if (processed.has(p) || !isBulletParagraph(p)) continue;
+
+      // Group consecutive bullet paragraphs
+      const group: Element[] = [p];
+      processed.add(p);
+      let next = p.nextElementSibling;
+      while (next && isBulletParagraph(next)) {
+        group.push(next);
+        processed.add(next);
+        next = next.nextElementSibling;
+      }
+
+      const ul = doc.createElement('ul');
+      ul.className = 'bullet-list';
+
+      for (const itemP of group) {
+        const li = doc.createElement('li');
+        
+        // Strip leading bullet symbol from the text
+        const walker = doc.createTreeWalker(itemP, NodeFilter.SHOW_TEXT, null);
+        const firstTextNode = walker.nextNode() as Text | null;
+        if (firstTextNode && firstTextNode.nodeValue) {
+          firstTextNode.nodeValue = firstTextNode.nodeValue.replace(bulletRegex, '');
+        }
+
+        while (itemP.firstChild) {
+          li.appendChild(itemP.firstChild);
+        }
+        ul.appendChild(li);
+      }
+
+      if (p.parentNode) {
+        p.parentNode.insertBefore(ul, p);
+        for (const itemP of group) {
+          if (itemP.parentNode) {
+            itemP.parentNode.removeChild(itemP);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 3.4. Tighten punctuation in ... ?.. !..
+  try {
+    const punctTightTestRegex = /(?:[!?]+[ \t\u00A0\u202F]*(?:\.{2,4}|…)|(?:\.{3,4}|…))/u;
+    const punctTightExecRegex = /(?:([!?]+)[ \t\u00A0\u202F]*(\.{2,4}|…)|(\.{3,4}|…))/gu;
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+    const textNodes: Text[] = [];
+    let n: Node | null;
+    while (n = walker.nextNode()) {
+      if (n.nodeValue && punctTightTestRegex.test(n.nodeValue)) {
+        textNodes.push(n as Text);
+      }
+    }
+
+    for (const node of textNodes) {
+      const parent = node.parentNode;
+      if (!parent) continue;
+      if (parent.nodeName === 'SPAN' && (
+        (parent as Element).classList.contains('punct-tight') ||
+        (parent as Element).classList.contains('punct-dots') ||
+        (parent as Element).classList.contains('punct-mark')
+      )) {
+        continue;
+      }
+      if (parent.nodeName === 'CODE' || parent.nodeName === 'PRE') {
+        continue;
+      }
+
+      const text = node.nodeValue || '';
+      punctTightExecRegex.lastIndex = 0;
+      const fragment = doc.createDocumentFragment();
+      let lastIdx = 0;
+      let match: RegExpExecArray | null;
+
+      while ((match = punctTightExecRegex.exec(text)) !== null) {
+        const matchIndex = match.index;
+        if (matchIndex > lastIdx) {
+          fragment.appendChild(doc.createTextNode(text.substring(lastIdx, matchIndex)));
+        }
+
+        const marks = match[1];
+        const dots = match[2];
+        const soloDots = match[3];
+
+        if (marks && dots) {
+          const normDots = dots.replace(/…/g, '..');
+          const span = doc.createElement('span');
+          const endsWithQ = marks.endsWith('?');
+          span.className = `punct-tight punct-tight-combo ${endsWithQ ? 'punct-combo-question' : 'punct-combo-exclamation'}`;
+
+          const markSpan = doc.createElement('span');
+          markSpan.className = 'punct-mark';
+          markSpan.textContent = marks;
+          span.appendChild(markSpan);
+
+          const dotsSpan = doc.createElement('span');
+          dotsSpan.className = 'punct-dots';
+          dotsSpan.textContent = normDots;
+          span.appendChild(dotsSpan);
+
+          fragment.appendChild(span);
+        } else if (soloDots) {
+          const normSolo = soloDots.replace(/…/g, '...');
+          const span = doc.createElement('span');
+          span.className = 'punct-tight punct-tight-dots';
+          span.textContent = normSolo;
+          fragment.appendChild(span);
+        }
+
+        lastIdx = punctTightExecRegex.lastIndex;
+      }
+
+      if (lastIdx < text.length) {
+        fragment.appendChild(doc.createTextNode(text.substring(lastIdx)));
+      }
+
+      parent.replaceChild(fragment, node);
+    }
+  } catch (e) {}
+
+  // 3.5. Ensure dash spacing rules:
+  // - Dashes followed by a capital letter (dialogue/direct speech start): fixed compact spacing after dash (.dash-space)
+  // - All other dashes (intra-sentence dashes, dialogue tags with lowercase): obey the same interval/spacing logic as words
+  // - Dashes adjacent to italicized punctuation/quotes: properly styled as italic, non-colliding, and tied with non-breaking space
+  try {
+    const getEffectivePrev = (node: Node): Node | null => {
+      let prev = node.previousSibling;
+      while (prev && prev.nodeType === Node.TEXT_NODE && !prev.nodeValue?.trim()) {
+        prev = prev.previousSibling;
+      }
+      return prev;
+    };
+
+    const getEffectiveNext = (node: Node): Node | null => {
+      let next = node.nextSibling;
+      while (next && next.nodeType === Node.TEXT_NODE && !next.nodeValue?.trim()) {
+        next = next.nextSibling;
+      }
+      return next;
+    };
+
+    const isBoundaryDash = (text: string, node: Node): boolean => {
+      if (/(?:^|[\s]+|\S[ \t\u00A0\u202F]+)(?:--|[\u2010-\u2015\u2013\u2014-])[ \t\u00A0\u202F]*$/.test(text)) {
+        const next = getEffectiveNext(node);
+        if (next && next.textContent && /^[ \t\u00A0\u202F]*[«"'“„\(\[]*[\p{L}\p{N}]/u.test(next.textContent)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const dashTestRegex = /(?:(?:^|[\s]+)(?:--|[\u2010-\u2015\u2013\u2014-])[ \t\u00A0\u202F]*|(?:\S)[ \t\u00A0\u202F]+(?:--|[\u2010-\u2015\u2013\u2014-])[ \t\u00A0\u202F]+)(?=[«"'“„\(\[]*[\p{L}\p{N}])/u;
+    const dashExecRegex = /(?:(^|[\s]+)(?:--|([\u2010-\u2015\u2013\u2014-]))[ \t\u00A0\u202F]*|(\S)[ \t\u00A0\u202F]+(?:--|([\u2010-\u2015\u2013\u2014-]))[ \t\u00A0\u202F]+)(?=([«"'“„\(\[]*)([\p{L}\p{N}]))/gu;
+    
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+    const textNodes: Text[] = [];
+    let n: Node | null;
+    while (n = walker.nextNode()) {
+      if (n.nodeValue && (dashTestRegex.test(n.nodeValue) || isBoundaryDash(n.nodeValue, n))) {
+        textNodes.push(n as Text);
+      }
+    }
+
+    const createIntermediateDash = (isItalic: boolean): Node => {
+      const dashSpan = doc.createElement('span');
+      dashSpan.className = 'reader-dash';
+      const glyphSpan = doc.createElement('span');
+      glyphSpan.className = 'reader-dash-glyph';
+      glyphSpan.textContent = '—';
+      if (isItalic) {
+        const emEl = doc.createElement('em');
+        emEl.appendChild(glyphSpan);
+        dashSpan.appendChild(emEl);
+      } else {
+        dashSpan.appendChild(glyphSpan);
+      }
+      return dashSpan;
+    };
+
+    for (const node of textNodes) {
+      const parent = node.parentNode;
+      if (!parent) continue;
+      if (parent.nodeName === 'SPAN' && (
+        (parent as Element).classList.contains('dash-fixed') || 
+        (parent as Element).classList.contains('dash-space') || 
+        (parent as Element).classList.contains('dash-space-intra') ||
+        (parent as Element).classList.contains('dash-word-lead')
+      )) {
+        continue;
+      }
+
+      const text = node.nodeValue || '';
+      dashExecRegex.lastIndex = 0;
+      
+      const fragment = doc.createDocumentFragment();
+      let lastIdx = 0;
+      let match: RegExpExecArray | null;
+
+      const effPrev = getEffectivePrev(node);
+      const effNext = getEffectiveNext(node);
+      const isInsideItalic = Boolean(parent.closest && parent.closest('em, i'));
+
+      // Check boundary dash at the very end of text node followed by an element
+      if (!dashExecRegex.test(text) && isBoundaryDash(text, node)) {
+        const boundaryMatch = text.match(/(?:^|([\s]+)|(\S)[ \t\u00A0\u202F]+)(?:--|([\u2010-\u2015\u2013\u2014-]))[ \t\u00A0\u202F]*$/);
+        if (boundaryMatch) {
+          const matchStart = boundaryMatch.index || 0;
+          if (matchStart > 0) {
+            fragment.appendChild(doc.createTextNode(text.substring(0, matchStart)));
+          }
+
+          const nextText = effNext?.textContent?.trimStart() || '';
+          const nextChar = nextText.charAt(0);
+          const isFollowedByCapital = /[\p{Lu}]/u.test(nextChar);
+          const isNextItalic = effNext && effNext.nodeType === Node.ELEMENT_NODE && (
+            /^(em|i)$/i.test((effNext as Element).tagName) ||
+            Boolean((effNext as Element).closest && (effNext as Element).closest('em, i'))
+          );
+          const isTouchingItalic = isInsideItalic || Boolean(isNextItalic);
+
+          const prec = boundaryMatch[2];
+          if (isFollowedByCapital || !prec) {
+            const wrapperSpan = doc.createElement('span');
+            wrapperSpan.className = 'dash-fixed';
+            if (prec) {
+              wrapperSpan.appendChild(doc.createTextNode(prec + '\u00A0'));
+            }
+            wrapperSpan.appendChild(createIntermediateDash(isTouchingItalic && !isInsideItalic));
+            const spaceSpan = doc.createElement('span');
+            spaceSpan.className = 'dash-space';
+            spaceSpan.textContent = ' ';
+            wrapperSpan.appendChild(spaceSpan);
+            fragment.appendChild(wrapperSpan);
+          } else {
+            const nowrapSpan = doc.createElement('span');
+            nowrapSpan.className = 'dash-word-lead';
+            nowrapSpan.appendChild(doc.createTextNode(prec + '\u00A0'));
+            nowrapSpan.appendChild(createIntermediateDash(isTouchingItalic && !isInsideItalic));
+            fragment.appendChild(nowrapSpan);
+            fragment.appendChild(doc.createTextNode(' '));
+          }
+          parent.replaceChild(fragment, node);
+          continue;
+        }
+      }
+
+      dashExecRegex.lastIndex = 0;
+
+      while ((match = dashExecRegex.exec(text)) !== null) {
+        const matchStart = match.index;
+        const precedingChar = match[3]; // If preceded by a non-whitespace character in the same text node
+        const rawDash = match[2] || match[4] || '—';
+        const dashChar = rawDash;
+        const nextChar = match[6] || '';
+        const isFollowedByCapital = /[\p{Lu}]/u.test(nextChar);
+
+        // Check if the dash is touching italics
+        let isTouchingItalic = isInsideItalic;
+        if (!isTouchingItalic) {
+          // If dash is at start of text node, check previous sibling element
+          if ((matchStart === 0 || (lastIdx === 0 && /^\s*$/.test(text.substring(0, matchStart)))) && effPrev) {
+            if (effPrev.nodeType === Node.ELEMENT_NODE && (
+              /^(em|i)$/i.test((effPrev as Element).tagName) ||
+              (effPrev as Element).querySelector('em, i') !== null ||
+              Boolean((effPrev as Element).closest && (effPrev as Element).closest('em, i'))
+            )) {
+              isTouchingItalic = true;
+            }
+          }
+          // If dash is followed immediately by an italic next sibling element
+          if (!isTouchingItalic && effNext && effNext.nodeType === Node.ELEMENT_NODE) {
+            if (/^(em|i)$/i.test((effNext as Element).tagName) || Boolean((effNext as Element).closest && (effNext as Element).closest('em, i'))) {
+              if (dashExecRegex.lastIndex >= text.length || /^\s*$/.test(text.substring(dashExecRegex.lastIndex))) {
+                isTouchingItalic = true;
+              }
+            }
+          }
+        }
+
+        let leadingText = text.substring(lastIdx, matchStart);
+        if (lastIdx === 0 && /^\s+$/.test(leadingText)) {
+          leadingText = '';
+        }
+
+        if (leadingText) {
+          fragment.appendChild(doc.createTextNode(leadingText));
+        }
+
+        const renderDashText = (): Node => {
+          return createIntermediateDash(isTouchingItalic && !isInsideItalic);
+        };
+
+        const isAtLeadingElementBoundary = !precedingChar && effPrev && (matchStart === 0 || (lastIdx === 0 && /^\s*$/.test(text.substring(0, matchStart))));
+
+        if (isFollowedByCapital) {
+          // EXCEPTION: Dash followed by capital letter (e.g. dialogue start / direct speech)
+          // Fixed compact spacing after dash so no huge justification gap before capitalized word
+          if (precedingChar) {
+            const wrapperSpan = doc.createElement('span');
+            wrapperSpan.className = 'dash-fixed';
+            wrapperSpan.appendChild(doc.createTextNode(precedingChar + '\u00A0'));
+            wrapperSpan.appendChild(renderDashText());
+
+            const spaceSpan = doc.createElement('span');
+            spaceSpan.className = 'dash-space';
+            spaceSpan.textContent = ' ';
+            wrapperSpan.appendChild(spaceSpan);
+
+            fragment.appendChild(wrapperSpan);
+          } else if (isAtLeadingElementBoundary) {
+            // Preceded by an element (e.g. italicized quote, italicized punctuation, or punct-tight):
+            // Include non-breaking space before dash so dash never sticks to the preceding element
+            const wrapperSpan = doc.createElement('span');
+            wrapperSpan.className = 'dash-fixed';
+            wrapperSpan.appendChild(doc.createTextNode('\u00A0'));
+            wrapperSpan.appendChild(renderDashText());
+
+            const spaceSpan = doc.createElement('span');
+            spaceSpan.className = 'dash-space';
+            spaceSpan.textContent = ' ';
+            wrapperSpan.appendChild(spaceSpan);
+
+            fragment.appendChild(wrapperSpan);
+          } else {
+            const wrapperSpan = doc.createElement('span');
+            wrapperSpan.className = 'dash-fixed';
+            wrapperSpan.appendChild(renderDashText());
+
+            const spaceSpan = doc.createElement('span');
+            spaceSpan.className = 'dash-space';
+            spaceSpan.textContent = ' ';
+            wrapperSpan.appendChild(spaceSpan);
+
+            fragment.appendChild(wrapperSpan);
+          }
+        } else {
+          // STANDARD: Dashes obey the exact same spacing and interval logic as words
+          if (precedingChar) {
+            // Keep preceding character tied to dash so dash cannot break alone onto a new line,
+            // followed by a regular word space that participates in justification
+            const nowrapSpan = doc.createElement('span');
+            nowrapSpan.className = 'dash-word-lead';
+            nowrapSpan.appendChild(doc.createTextNode(precedingChar + '\u00A0'));
+            nowrapSpan.appendChild(renderDashText());
+            fragment.appendChild(nowrapSpan);
+            fragment.appendChild(doc.createTextNode(' '));
+          } else if (isAtLeadingElementBoundary) {
+            // Preceded by an element (e.g. italicized quote, punctuation, or punct-tight):
+            // Tie with non-breaking space so dash never breaks alone onto a new line and has proper spacing
+            const nowrapSpan = doc.createElement('span');
+            nowrapSpan.className = 'dash-word-lead';
+            nowrapSpan.appendChild(doc.createTextNode('\u00A0'));
+            nowrapSpan.appendChild(renderDashText());
+            fragment.appendChild(nowrapSpan);
+            fragment.appendChild(doc.createTextNode(' '));
+          } else {
+            fragment.appendChild(renderDashText());
+            fragment.appendChild(doc.createTextNode(' '));
+          }
+        }
+
+        lastIdx = dashExecRegex.lastIndex;
+      }
+
+      if (lastIdx < text.length) {
+        fragment.appendChild(doc.createTextNode(text.substring(lastIdx)));
+      }
+
+      parent.replaceChild(fragment, node);
+    }
+  } catch (e) {}
+
+  // 3.5.1. Wrap any remaining standalone em-dashes or horizontal bars so they also get the intermediate width
+  try {
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+    const remainingNodes: Text[] = [];
+    let n: Node | null;
+    while (n = walker.nextNode()) {
+      if (n.nodeValue && /[\u2014\u2015]/.test(n.nodeValue)) {
+        const parent = n.parentNode as Element | null;
+        if (parent && !parent.closest('.reader-dash, .reader-dash-glyph, .dash-fixed, .dash-word-lead')) {
+          remainingNodes.push(n as Text);
+        }
+      }
+    }
+    for (const node of remainingNodes) {
+      const parent = node.parentNode;
+      if (!parent) continue;
+      const text = node.nodeValue || '';
+      const parts = text.split(/([\u2014\u2015])/g);
+      if (parts.length <= 1) continue;
+      const frag = doc.createDocumentFragment();
+      for (const part of parts) {
+        if (part === '—' || part === '―') {
+          const isInsideItalic = Boolean(parent.closest && parent.closest('em, i'));
+          frag.appendChild(createIntermediateDash(isInsideItalic));
+        } else if (part) {
+          frag.appendChild(doc.createTextNode(part));
+        }
+      }
+      parent.replaceChild(frag, node);
+    }
+  } catch (e) {}
+
+  // 3.6. Prevent short lines from stretching: split paragraphs on <br> into separate paragraphs and remove trailing <br>
+  try {
+    const allP = Array.from(doc.querySelectorAll('p'));
+    for (const p of allP) {
+      if (p.classList.contains('verse') || p.closest('.poem') || p.closest('.stanza')) {
+        continue;
+      }
+      // Remove trailing <br> which causes justification of the preceding line
+      while (p.lastElementChild && p.lastElementChild.tagName.toLowerCase() === 'br') {
+        p.lastElementChild.remove();
+      }
+      if (!p.querySelector('br')) continue;
+      
+      const inner = p.innerHTML;
+      if (/<br\s*\/?>/i.test(inner)) {
+        const parts = inner.split(/<br\s*\/?>/i).map(s => s.trim()).filter(Boolean);
+        if (parts.length > 1) {
+          const parent = p.parentNode;
+          if (parent) {
+            const frag = doc.createDocumentFragment();
+            parts.forEach(part => {
+              const newP = doc.createElement('p');
+              newP.className = p.className;
+              newP.innerHTML = part;
+              frag.appendChild(newP);
+            });
+            parent.replaceChild(frag, p);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 3.7. Italic correction: a slanted last letter leans into the following space and makes it
+  // look lost, so italic text that ends a word gets a little room after it
+  try {
+    doc.querySelectorAll('em, i').forEach(el => {
+      if (el.parentElement?.closest('em, i')) return;
+      const text = el.textContent || '';
+      const after = el.nextSibling;
+      const endsWithSpace = /\s$/.test(text);
+      const spaceAfter = after && after.nodeType === Node.TEXT_NODE && /^\s/.test(after.nodeValue || '');
+      if (/[\p{L}\p{N}][\s\u00AD]*$/u.test(text) && (endsWithSpace || spaceAfter)) el.classList.add('it-corr');
+    });
+  } catch (e) {}
+
+  // 4. Apply Bionic Reading
+  if (isBionic && !isRsvpMode) {
+    try {
+      // First handle dash-word-lead spans: they contain precedingChar + '\u00A0' (+ dash node)
+      // We must avoid bionic reading splitting precedingChar as a 1-letter word (which would make it bold)
+      const dashLeadSpans = doc.querySelectorAll('.dash-word-lead');
+      dashLeadSpans.forEach(span => {
+        // Find preceding word in previous text sibling
+        let prevSibling = span.previousSibling;
+        if (prevSibling && prevSibling.nodeType === Node.TEXT_NODE && prevSibling.nodeValue) {
+          const val = prevSibling.nodeValue;
+          const match = val.match(/([\p{L}\p{N}\xad]+)$/u);
+          if (match) {
+            const prefix = match[1];
+            // Extract the first character from the span (the precedingChar)
+            const firstChild = span.firstChild;
+            if (firstChild && firstChild.nodeType === Node.TEXT_NODE && firstChild.nodeValue) {
+              const leadText = firstChild.nodeValue; // e.g. "о\u00A0"
+              const leadChar = leadText.charAt(0);
+              if (!/[\p{L}\p{N}]/u.test(leadChar)) return;
+              const fullWord = prefix + leadChar;
+              // Format fullWord with bionic reading
+              const bionicFullWord = createBionicFragment(fullWord, doc);
+              // Check if the last letter (leadChar) is inside a <b> tag
+              let lastCharIsBold = false;
+              let boldPartText = "";
+              const bTags = bionicFullWord.querySelectorAll('b');
+              bTags.forEach(b => {
+                boldPartText += b.textContent || "";
+              });
+              if (boldPartText.length === fullWord.length) {
+                lastCharIsBold = true;
+              }
+              // Format prefix for prevSibling
+              const prefixFrag = createBionicFragment(prefix, doc);
+              // Replace matched word in prevSibling
+              const beforeWord = val.slice(0, -prefix.length);
+              const newPrevFrag = doc.createDocumentFragment();
+              if (beforeWord) {
+                newPrevFrag.appendChild(createBionicFragment(beforeWord, doc));
+              }
+              // Now apply proper bold/regular to prefix and leadChar based on fullWord calculation
+              // Calculate split point for fullWord
+              let realLen = 0;
+              for (let i = 0; i < fullWord.length; i++) {
+                if (fullWord.charCodeAt(i) !== 173) realLen++;
+              }
+              const boldLen = getBionicBoldLength(realLen);
+              let boldCharCount = 0;
+              let splitIndex = 0;
+              for (let i = 0; i < fullWord.length; i++) {
+                if (fullWord.charCodeAt(i) !== 173) boldCharCount++;
+                if (boldCharCount === boldLen) {
+                  splitIndex = i + 1;
+                  break;
+                }
+              }
+              const fullBold = fullWord.substring(0, splitIndex);
+              const fullReg = fullWord.substring(splitIndex);
+
+              // Prefix portion
+              const prefixBold = fullBold.substring(0, Math.min(fullBold.length, prefix.length));
+              const prefixReg = fullWord.substring(prefixBold.length, prefix.length);
+
+              const prefixReplacement = doc.createDocumentFragment();
+              if (prefixBold) {
+                const b = doc.createElement('b');
+                b.className = 'font-bold';
+                b.textContent = prefixBold;
+                prefixReplacement.appendChild(b);
+              }
+              if (prefixReg) {
+                prefixReplacement.appendChild(doc.createTextNode(prefixReg));
+              }
+
+              // leadChar portion
+              const leadCharIsBold = splitIndex > prefix.length;
+              if (leadCharIsBold) {
+                const b = doc.createElement('b');
+                b.className = 'font-bold';
+                b.textContent = leadChar;
+                firstChild.nodeValue = leadText.slice(leadChar.length);
+                span.insertBefore(b, firstChild);
+              }
+
+              // Update previous sibling
+              const parentPrev = prevSibling.parentNode;
+              if (parentPrev) {
+                const combinedFrag = doc.createDocumentFragment();
+                if (beforeWord) {
+                  combinedFrag.appendChild(createBionicFragment(beforeWord, doc));
+                }
+                combinedFrag.appendChild(prefixReplacement);
+                parentPrev.replaceChild(combinedFrag, prevSibling);
+              }
+            }
+          }
+        }
+      });
+
+      const textNodes: Text[] = [];
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+      let n;
+      while (n = walker.nextNode()) {
+        if (n.nodeValue && n.nodeValue.trim() !== "") {
+          if (!shouldSkipBionic(n)) {
+            textNodes.push(n as Text);
+          }
+        }
+      }
+      textNodes.forEach(tn => {
+        const val = tn.nodeValue || "";
+        const frag = createBionicFragment(val, doc);
+        tn.parentNode?.replaceChild(frag, tn);
+      });
+    } catch (e) {}
+  }
+
+  // 5. Paragraph rules: no dropcap or indent removal for italic start, dash start, or quote start
+  try {
+    const allP = doc.querySelectorAll('p');
+    allP.forEach(p => {
+      const text = p.textContent ? p.textContent.trim() : '';
+      if (!text) return;
+
+      // a. Check if starts with dash / hyphen
+      const startsWithDash = /^[\s]*[\u002D\u2010-\u2015\u2016\u2E3A\u2E3B-]/.test(text) ||
+                             Boolean(p.querySelector('.dash-fixed, .dash-word-lead, .reader-dash') && text.indexOf(p.querySelector('.dash-fixed, .dash-word-lead, .reader-dash')!.textContent || '') === 0);
+
+      // b. Check if starts with quote
+      const startsWithQuote = /^[\s]*[«»“”„‘’"'‹›]/.test(text);
+
+      // c. Check if starts with italics (em or i element)
+      let startsWithItalic = false;
+      const firstChild = p.firstElementChild;
+      if (firstChild && /^(em|i)$/i.test(firstChild.tagName)) {
+        const prevSibling = firstChild.previousSibling;
+        if (!prevSibling || !prevSibling.nodeValue || prevSibling.nodeValue.trim() === '') {
+          startsWithItalic = true;
+        }
+      }
+
+      if (!startsWithItalic) {
+        const walker = doc.createTreeWalker(p, NodeFilter.SHOW_ALL, null);
+        let current: Node | null = walker.nextNode();
+        current = walker.nextNode(); // skip root 'p'
+        while (current) {
+          if (current.nodeType === Node.TEXT_NODE) {
+            if (current.nodeValue && current.nodeValue.trim() !== '') {
+              let parent: Node | null = current.parentNode;
+              while (parent && parent !== p) {
+                if (/^(em|i)$/i.test(parent.nodeName)) {
+                  startsWithItalic = true;
+                  break;
+                }
+                parent = parent.parentNode;
+              }
+              break;
+            }
+          }
+          current = walker.nextNode();
+        }
+      }
+
+      if (startsWithDash || startsWithQuote || startsWithItalic) {
+        p.classList.add('no-dropcap');
+      }
+    });
+  } catch (e) {}
+
+  // 6. Remove trailing empty elements (paragraphs, divs, empty lines) that cause extra blank pages
+  try {
+    const isNodeEmpty = (node: Node): boolean => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return !(node.nodeValue || '').replace(/[\s\u00A0\u200B-\u200D\uFEFF]+/g, '');
+      }
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.querySelector('img') || el.tagName.toLowerCase() === 'img' || el.tagName.toLowerCase() === 'hr') {
+          return false;
+        }
+        const text = (el.textContent || '').replace(/[\s\u00A0\u200B-\u200D\uFEFF]+/g, '');
+        return text.length === 0;
+      }
+      return true;
+    };
+
+    const trimTrailingEmptyNodes = (parent: Node) => {
+      while (parent.lastChild && isNodeEmpty(parent.lastChild)) {
+        parent.removeChild(parent.lastChild);
+      }
+      if (parent.lastChild && parent.lastChild.nodeType === Node.ELEMENT_NODE) {
+        trimTrailingEmptyNodes(parent.lastChild);
+      }
+    };
+
+    trimTrailingEmptyNodes(doc.body);
+  } catch (e) {}
+
+  return doc.body.innerHTML;
+}
+
+interface EBookReaderProps {
+  book: Book;
+  currentChapterIndex: number;
+  initialProgressRatio: number;
+  fontSize: number;
+  theme: 'dark' | 'light';
+  uiVisible: boolean;
+  onToggleUI: () => void;
+  onProgressUpdate: (ratio: number) => void;
+  onChapterChange: (index: number, align: 'start' | 'end') => void;
+  highlightText?: string;
+  highlightMatchIndex?: number;
+  onHighlightClear?: () => void;
+  isStyledMode: boolean;
+  onImageClick: (src: string) => void;
+  onExternalLinkClick?: (href: string) => void;
+  appStyle?: string;
+  isBionic?: boolean;
+  isRsvpMode?: boolean;
+  rsvpWpm?: number;
+  onRsvpWpmChange?: (wpm: number) => void;
+  isPagedMode?: boolean;
+  onTogglePagedMode?: () => void;
+  readerFont?: string;
+}
+
+const EBookReader: React.FC<EBookReaderProps> = ({
+  book,
+  currentChapterIndex: propChapterIndex,
+  initialProgressRatio,
+  fontSize,
+  theme,
+  uiVisible,
+  onToggleUI,
+  onProgressUpdate,
+  onChapterChange,
+  highlightText,
+  highlightMatchIndex = -1,
+  onHighlightClear,
+  isStyledMode,
+  onImageClick,
+  onExternalLinkClick,
+  appStyle,
+  isBionic = false,
+  isRsvpMode = false,
+  rsvpWpm = 300,
+  onRsvpWpmChange,
+  isPagedMode = false,
+  onTogglePagedMode,
+  readerFont = 'Literata'
+}) => {
+  const readerFontCSS = getFontFamilyCSS(readerFont);
+
+  // Dots after ! and ? ("!..", "?..") are drawn at the size of the dot in ! and ?,
+  // measured from the reading font, so all three dots look alike.
+  const [dotScale, setDotScale] = useState({ excl: 1, quest: 1 });
+  useEffect(() => {
+    let cancelled = false;
+    const measure = () => {
+      if (cancelled) return;
+      try {
+        const size = 200;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size * 1.5;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        // Height of the lowest ink blob of a glyph (the dot)
+        const dotHeight = (ch: string) => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.font = `400 ${size}px ${readerFontCSS}`;
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillStyle = '#000';
+          ctx.fillText(ch, 20, size * 1.1);
+          const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          const rowHasInk = (y: number) => {
+            for (let x = 0; x < canvas.width; x++) if (data[(y * canvas.width + x) * 4 + 3] > 100) return true;
+            return false;
+          };
+          let y = canvas.height - 1;
+          while (y > 0 && !rowHasInk(y)) y--;
+          const bottom = y;
+          while (y > 0 && rowHasInk(y)) y--;
+          return bottom - y;
+        };
+        const period = dotHeight('.');
+        const excl = dotHeight('!');
+        const quest = dotHeight('?');
+        const clamp = (v: number) => (Number.isFinite(v) && v > 0.5 && v < 1.6 ? Math.round(v * 100) / 100 : 1);
+        if (period > 0) setDotScale({ excl: clamp(excl / period), quest: clamp(quest / period) });
+      } catch {}
+    };
+    if (document.fonts?.ready) document.fonts.ready.then(measure); else measure();
+    return () => { cancelled = true; };
+  }, [readerFontCSS]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chapter = book.chapters[propChapterIndex];
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const contentRestoredRef = useRef(false);
+  const isCoverPage = Boolean(
+    (propChapterIndex === 0 && (
+      chapter?.name === "Cover" || 
+      chapter?.name?.toLowerCase() === "cover" || 
+      chapter?.name?.toLowerCase() === "обложка" || 
+      chapter?.name?.toLowerCase() === "титульный лист" || 
+      chapter?.name?.toLowerCase() === "титульный" || 
+      chapter?.name?.toLowerCase() === "титул" || 
+      chapter?.name?.toLowerCase() === "title" || 
+      chapter?.name?.toLowerCase() === "title page" || 
+      chapter?.name?.toLowerCase() === "titlepage" || 
+      (chapter?.content && (
+        chapter.content.includes("book-cover-page") ||
+        chapter.content.includes("titlepage") ||
+        chapter.content.includes("title-page") ||
+        chapter.content.includes("title_page")
+      ))
+    )) || 
+    (chapter?.name && (
+      chapter.name.toLowerCase() === "cover" ||
+      chapter.name.toLowerCase() === "обложка" ||
+      chapter.name.toLowerCase() === "титульный лист" ||
+      chapter.name.toLowerCase() === "титульный" ||
+      chapter.name.toLowerCase() === "титул" ||
+      chapter.name.toLowerCase() === "title" ||
+      chapter.name.toLowerCase() === "title page" ||
+      chapter.name.toLowerCase() === "titlepage"
+    )) || 
+    (chapter?.content && (
+      chapter.content.includes("book-cover-page") ||
+      chapter.content.includes('class="titlepage"') ||
+      chapter.content.includes("class='titlepage'") ||
+      chapter.content.includes('class="title-page"') ||
+      chapter.content.includes("class='title-page'") ||
+      chapter.content.includes('class="title_page"') ||
+      chapter.content.includes("class='title_page'")
+    ))
+  );
+
+  const isNotesPage = Boolean(
+    chapter?.name?.toLowerCase() === "сноски" ||
+    chapter?.name?.toLowerCase() === "notes" ||
+    chapter?.name?.toLowerCase() === "footnotes" ||
+    chapter?.name?.toLowerCase() === "примечания" ||
+    (chapter?.content && (
+      chapter.content.includes('class="notes-list"') ||
+      chapter.content.includes("class='notes-list'") ||
+      chapter.content.includes('class="note-entry"') ||
+      chapter.content.includes("class='note-entry'")
+    ))
+  );
+  const [pageIndex, setPageIndex] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSlices, setPageSlices] = useState<{ startY: number; endY: number }[]>([{ startY: 0, endY: 0 }]);
+  const [containerWidth, setContainerWidth] = useState(800);
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [flipOffset, setFlipOffset] = useState(0);
+  const [pageOpacity, setPageOpacity] = useState(1);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffsetRef = useRef(0);
+  const pagesContainerRef = useRef<HTMLDivElement>(null);
+  const [availableHeight, setAvailableHeight] = useState(600);
+  const [pageDisplayMode, setPageDisplayMode] = useState<'book' | 'chapter' | 'percent'>(() => {
+    try {
+      return (localStorage.getItem('reader_page_display_mode') as any) || 'book';
+    } catch {
+      return 'book';
+    }
+  });
+
+  const togglePageDisplayMode = React.useCallback(() => {
+    setPageDisplayMode(prev => {
+      const next = prev === 'book' ? 'chapter' : prev === 'chapter' ? 'percent' : 'book';
+      try {
+        localStorage.setItem('reader_page_display_mode', next);
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const pagedContainerRef = containerRef;
+  const pagedContentRef = contentRef;
+  const lastProgressRef = useRef(initialProgressRatio);
+  const lastScrollTopRef = useRef<number>(0);
+
+  const isChapterSwitchingRef = useRef(false);
+  const prevChapterIndexRef = useRef(propChapterIndex);
+  const processedCacheRef = useRef<Map<string, string>>(new Map());
+
+  const [processedContent, setProcessedContent] = useState<string>(() => {
+    if (chapter?.content) {
+      return transformChapterContent(chapter.content, isCoverPage, isBionic, isRsvpMode, isStyledMode);
+    }
+    return "";
+  });
+
+  // Clear caches when layout-affecting typography settings or book change
+  useEffect(() => {
+    processedCacheRef.current.clear();
+    return () => {
+      processedCacheRef.current.clear();
+    };
+  }, [fontSize, readerFont, isBionic, isStyledMode, book?.id]);
+
+  // When chapter changes, reset flags and initialize page index
+  useEffect(() => {
+    contentRestoredRef.current = false;
+    isChapterSwitchingRef.current = true;
+    const isAlignEnd = initialProgressRatio >= 0.99;
+    lastProgressRef.current = isAlignEnd ? 1 : 0;
+
+    if (isAlignEnd) {
+      setPageIndex(Math.max(0, totalPages - 1));
+    } else {
+      setPageIndex(0);
+    }
+  }, [propChapterIndex, book?.id]);
+
+  // Process Chapter Content reactively whenever content or typography mode changes
+  useEffect(() => {
+    if (!chapter?.content) {
+      setProcessedContent("");
+      setIsLoading(false);
+      return;
+    }
+
+    const cacheKey = `${book?.id || ''}_${propChapterIndex}_${isCoverPage}_${isBionic}_${isRsvpMode}_${isStyledMode}`;
+    if (processedCacheRef.current.has(cacheKey)) {
+      setProcessedContent(processedCacheRef.current.get(cacheKey)!);
+      setIsLoading(false);
+      return;
+    }
+
+    // A long chapter takes a while: show the spinner first and only then do the work, so the
+    // app does not look frozen. Short ones get the spinner only if they take over 30 ms.
+    const heavy = chapter.content.length > HEAVY_CHAPTER;
+    if (heavy) setIsLoading(true);
+    const timer = setTimeout(() => {
+      setIsLoading(true);
+    }, 30);
+
+    let workTimer: ReturnType<typeof setTimeout> | undefined;
+    const work = () => {
+      try {
+        const html = transformChapterContent(chapter.content, isCoverPage, isBionic, isRsvpMode, isStyledMode);
+        if (processedCacheRef.current.size >= 6) {
+          const firstKey = processedCacheRef.current.keys().next().value;
+          if (firstKey) processedCacheRef.current.delete(firstKey);
+        }
+        processedCacheRef.current.set(cacheKey, html);
+        setProcessedContent(html);
+      } finally {
+        clearTimeout(timer);
+        requestAnimationFrame(() => {
+          setIsLoading(false);
+        });
+      }
+    };
+    // After the next paint when the spinner has to be seen first
+    // Two frames: the spinner is committed by React after the first one
+    let frameId = requestAnimationFrame(() => {
+      if (heavy) frameId = requestAnimationFrame(() => { workTimer = setTimeout(work, 0); });
+      else work();
+    });
+
+    return () => {
+      clearTimeout(timer);
+      if (workTimer) clearTimeout(workTimer);
+      cancelAnimationFrame(frameId);
+    };
+  }, [chapter?.content, propChapterIndex, isCoverPage, isBionic, isRsvpMode, isStyledMode, book?.id]);
+
+  const pageIndexRef = useRef(pageIndex);
+  pageIndexRef.current = pageIndex;
+  const containerWidthRef = useRef(containerWidth);
+  containerWidthRef.current = containerWidth;
+  const isPagedModeRef = useRef(isPagedMode);
+  isPagedModeRef.current = isPagedMode;
+  const pageSlicesRef = useRef(pageSlices);
+  pageSlicesRef.current = pageSlices;
+
+  const areSlicesEqual = (a: { startY: number; endY: number }[], b: { startY: number; endY: number }[]) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (Math.abs(a[i].startY - b[i].startY) > 1 || Math.abs(a[i].endY - b[i].endY) > 1) return false;
+    }
+    return true;
+  };
+
+  const getAnchor = React.useCallback(() => {
+    if (!contentRef.current || pageSlicesRef.current.length === 0) return 0;
+    const currentSlice = pageSlicesRef.current[pageIndexRef.current];
+    if (!currentSlice) return 0;
+    const content = contentRef.current;
+    const contentTop = content.getBoundingClientRect().top;
+    const elements = Array.from(content.querySelectorAll<HTMLElement>(
+      'p, h1, h2, h3, h4, h5, h6, blockquote, li, img, hr, div.title, div.subtitle, div.epigraph, div.note-entry'
+    ));
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i];
+      const top = el.getBoundingClientRect().top - contentTop;
+      if (top >= currentSlice.startY - 2) {
+        return i;
+      }
+    }
+    return 0;
+  }, []);
+
+  const findPageForAnchor = React.useCallback((anchorIndex: number, slices: { startY: number; endY: number }[]) => {
+    if (!contentRef.current || slices.length <= 1) return 0;
+    const content = contentRef.current;
+    const contentTop = content.getBoundingClientRect().top;
+    const elements = Array.from(content.querySelectorAll<HTMLElement>(
+      'p, h1, h2, h3, h4, h5, h6, blockquote, li, img, hr, div.title, div.subtitle, div.epigraph, div.note-entry'
+    ));
+    const targetEl = elements[anchorIndex];
+    if (!targetEl) return 0;
+    const top = targetEl.getBoundingClientRect().top - contentTop;
+    const matched = slices.findIndex((s, idx) => {
+      const nextS = slices[idx + 1];
+      return nextS ? (top >= s.startY - 2 && top < nextS.startY) : true;
+    });
+    return Math.max(0, matched);
+  }, []);
+
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchStartTime = useRef(0);
+  const isDraggingRef = useRef(false);
+
+  const currentChapterTitle = React.useMemo(() => {
+    const raw = book?.chapters?.[propChapterIndex]?.name || '';
+    return raw.replace(/<[^>]*>/g, '').trim();
+  }, [book, propChapterIndex]);
+
+  const { globalCurrentPage, globalTotalPages, chapterCurrentPage, chapterTotalPages } = React.useMemo(() => {
+    const currentChapterPages = isCoverPage ? 1 : Math.max(1, totalPages);
+    const currentPageInChapter = Math.min(currentChapterPages, pageIndex + 1);
+
+    if (!isPagedMode || !book || !book.chapters || book.chapters.length === 0) {
+      return { 
+        globalCurrentPage: currentPageInChapter, 
+        globalTotalPages: currentChapterPages,
+        chapterCurrentPage: currentPageInChapter,
+        chapterTotalPages: currentChapterPages
+      };
+    }
+
+    const getTextLen = (ch: any) => {
+      if (typeof ch.length === 'number' && ch.length > 0) return ch.length;
+      if (ch.content) return ch.content.replace(/<[^>]*>/g, '').trim().length;
+      return 0;
+    };
+
+    // Calculate deterministic density based on layout settings (font size and viewport width)
+    const fontSizeRem = typeof fontSize === 'number' && fontSize > 0 
+      ? (fontSize > 5 ? fontSize / 16 : fontSize) 
+      : 1.2;
+    const effectiveWidthFactor = Math.max(0.5, Math.min(2.0, (containerWidth || 600) / 600));
+    
+    // Deterministic characters per page (standard calibrated page count for current typography and width)
+    const charsPerPage = Math.max(250, Math.round((950 * effectiveWidthFactor) / Math.pow(fontSizeRem, 1.35)));
+
+    // Deterministically allocate pages for every chapter across the entire book
+    const chapterAllocatedPages: number[] = book.chapters.map((ch, idx) => {
+      const name = (ch.name || '').toLowerCase();
+      const isCover = idx === 0 && (name === 'cover' || name.includes('обложка'));
+      if (isCover) return 1;
+
+      const len = getTextLen(ch);
+      return len > 0 ? Math.max(1, Math.round(len / charsPerPage)) : 1;
+    });
+
+    const totalAllocatedPages = chapterAllocatedPages.reduce((acc, p) => acc + p, 0);
+    const globalTotal = Math.max(1, totalAllocatedPages);
+
+    let pagesBefore = 0;
+    for (let i = 0; i < propChapterIndex; i++) {
+      pagesBefore += chapterAllocatedPages[i];
+    }
+
+    const curAlloc = chapterAllocatedPages[propChapterIndex] || 1;
+    let pageInCurChapterGlobal = 1;
+    if (isCoverPage || curAlloc <= 1 || currentChapterPages <= 1) {
+      pageInCurChapterGlobal = 1;
+    } else {
+      const chapterRatio = pageIndex / Math.max(1, currentChapterPages - 1);
+      pageInCurChapterGlobal = Math.max(1, Math.min(curAlloc, Math.round(chapterRatio * (curAlloc - 1)) + 1));
+    }
+
+    const calculatedCurrentPage = Math.max(1, Math.min(globalTotal, pagesBefore + pageInCurChapterGlobal));
+
+    return {
+      globalCurrentPage: calculatedCurrentPage,
+      globalTotalPages: globalTotal,
+      chapterCurrentPage: currentPageInChapter,
+      chapterTotalPages: currentChapterPages
+    };
+  }, [book, propChapterIndex, pageIndex, totalPages, fontSize, containerWidth, isCoverPage, isPagedMode]);
+
+  const sharedRangeRef = useRef<Range | null>(null);
+  if (!sharedRangeRef.current && typeof document !== 'undefined') {
+    sharedRangeRef.current = document.createRange();
+  }
+
+  // Microtype optimization engine: eliminates gaps ("дыры") without expanding inter-character spacing
+  // Uses subtle micro-tightening to pull trailing words/syllables onto underfilled lines.
+  // OPTIMIZED: Uses IntersectionObserver to process paragraphs only when they are near the viewport.
+  const optimizeTypographyElements = React.useCallback((elements: HTMLElement[]) => {
+    if (!elements.length) return;
+
+    // The width the text is set in: line breaks depend on it
+    const currentWidth = contentRef.current?.clientWidth || containerWidthRef.current || 800;
+    const currentConfigKey = `${fontSize}_${currentWidth}_${isBionic}_${readerFont}_${isStyledMode}`;
+    
+    const range = sharedRangeRef.current || document.createRange();
+
+    // Widest space in the element. Justified spaces on one line are all equally wide, so one
+    // space per line is measured: the line's end is found by guessing it is as long as the
+    // previous one, or else by bisection.
+    const getMaxSpaceInElement = (el: HTMLElement): number => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+      let tn: Text | null;
+      let maxW = 0;
+      while ((tn = walker.nextNode() as Text | null)) {
+        const text = tn.nodeValue;
+        if (!text || !text.includes(' ')) continue;
+        const sp: number[] = [];
+        for (let i = 0; i < text.length; i++) if (text[i] === ' ') sp.push(i);
+        const node = tn;
+        const tops = new Map<number, number | null>();
+        const rectAt = (k: number) => {
+          try {
+            range.setStart(node, sp[k]);
+            range.setEnd(node, sp[k] + 1);
+            const rects = range.getClientRects();
+            return rects.length > 0 ? rects[0] : null;
+          } catch {
+            return null;
+          }
+        };
+        const topAt = (k: number) => {
+          if (!tops.has(k)) tops.set(k, rectAt(k)?.top ?? null);
+          return tops.get(k)!;
+        };
+        let i = 0, guess = 6;
+        while (i < sp.length) {
+          const r = rectAt(i);
+          tops.set(i, r ? r.top : null);
+          if (!r) { i++; continue; }
+          if (r.width > maxW) maxW = r.width;
+          const half = Math.max(4, r.height * 0.5);
+          const later = (k: number) => { const t = topAt(k); return t !== null && t > r.top + half; };
+          let next: number;
+          const g = i + guess;
+          if (g < sp.length && !later(g - 1) && later(g)) next = g;
+          else {
+            let lo = i + 1, hi = sp.length;
+            while (lo < hi) {
+              const mid = (lo + hi) >> 1;
+              if (later(mid)) hi = mid; else lo = mid + 1;
+            }
+            next = lo;
+          }
+          guess = Math.max(1, next - i);
+          i = next;
+        }
+      }
+      return maxW;
+    };
+
+    // Adaptive auto-compensator: applies the MINIMUM necessary compression (wdth & micro-tracking)
+    // with a raised lower threshold to ensure letters and words never clump or look overly cramped.
+    const candidates = [
+      { ls: '-0.002em', stretch: '99.5%', wdth: 99.5 },
+      { ls: '-0.004em', stretch: '99%', wdth: 99 },
+      { ls: '-0.007em', stretch: '98.5%', wdth: 98.5 },
+      { ls: '-0.010em', stretch: '98%', wdth: 98 },
+      { ls: '-0.014em', stretch: '97%', wdth: 97 },
+      { ls: '-0.018em', stretch: '96%', wdth: 96 },
+    ];
+
+    // Per-line fixes for loose lines, in the spirit of microtype. The browser breaks lines one at a
+    // time, so a line of two or three long words can end up with all its slack in one or two spaces.
+    // For such a line we first tighten it a little (up to -0.03em) if that brings the next syllable
+    // up; otherwise part of the slack goes between its letters (at most +0.04em) without moving
+    // any word to another line.
+    const unwrapLooseLines = (p: HTMLElement) => {
+      const spans = p.querySelectorAll('span.mt-ls');
+      if (!spans.length) return;
+      const parents = new Set<Node>();
+      spans.forEach(sp => {
+        const parent = sp.parentNode;
+        if (!parent) return;
+        while (sp.firstChild) parent.insertBefore(sp.firstChild, sp);
+        parent.removeChild(sp);
+        parents.add(parent);
+      });
+      parents.forEach(n => (n as Element).normalize?.());
+    };
+
+    const fixLooseLines = (p: HTMLElement, allowTighten: boolean) => {
+      const st = window.getComputedStyle(p);
+      if (st.textAlign !== 'justify') return;
+      const fs = parseFloat(st.fontSize) || 16;
+      const lineH = parseFloat(st.lineHeight) || fs * 1.5;
+      const pLs = parseFloat(st.letterSpacing) || 0;
+      const ctx = document.createElement('canvas').getContext('2d');
+      let spaceNat = fs * 0.26;
+      if (ctx) {
+        ctx.font = `${st.fontStyle} ${st.fontWeight} ${fs}px ${st.fontFamily}`;
+        spaceNat = ctx.measureText(' ').width + pLs;
+      }
+      type Seg = { node: Text; s: number; e: number };
+      type Line = { top: number; segs: Seg[]; spaces: number[]; last: Seg | null; count: number };
+      const rectOf = (n: Text, i: number) => {
+        range.setStart(n, i);
+        range.setEnd(n, i + 1);
+        const rs = range.getClientRects();
+        return rs.length ? rs[rs.length - 1] : null;
+      };
+
+      const lsCache = new Map<Element, number>();
+      const lsOf = (el: Element) => {
+        let v = lsCache.get(el);
+        if (v === undefined) {
+          v = parseFloat(window.getComputedStyle(el).letterSpacing) || 0;
+          lsCache.set(el, v);
+        }
+        return v;
+      };
+      const measure = (): Line[] => {
+        const lines: Line[] = [];
+        const lineAt = (top: number) => {
+          let L = lines[lines.length - 1];
+          if (!L || top > L.top + lineH * 0.5) {
+            L = { top, segs: [], spaces: [], last: null, count: 0 };
+            lines.push(L);
+          }
+          return L;
+        };
+        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null);
+        let tn: Text | null;
+        while ((tn = walker.nextNode() as Text | null)) {
+          const text = tn.nodeValue || '';
+          if (!text) continue;
+          // Specially spaced text (dots, dashes) keeps its own spacing
+          const parent = tn.parentElement || p;
+          const parentLs = lsOf(parent.classList.contains('mt-ls') ? parent.parentElement || p : parent);
+          const own = Math.abs(parentLs - pLs) < 0.01;
+          const re = / +|[^ ]+/g;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(text))) {
+            const a = m.index, b = a + m[0].length;
+            if (m[0][0] === ' ') {
+              const r = rectOf(tn, a);
+              if (r && r.width > 0) {
+                const L = lineAt(r.top);
+                L.spaces.push(r.width);
+                L.count += b - a;
+              }
+              continue;
+            }
+            // A word may be split over two lines at a hyphen: one rect per line
+            range.setStart(tn, a);
+            range.setEnd(tn, b);
+            const rs = range.getClientRects();
+            if (!rs.length) continue;
+            const top0 = rs[0].top;
+            let split = false;
+            for (let q = 1; q < rs.length; q++) if (Math.abs(rs[q].top - top0) > lineH * 0.5) split = true;
+            let i = a;
+            while (i < b) {
+              let j = b;
+              const r0 = i === a ? rs[0] : rectOf(tn, i);
+              if (!r0) break;
+              if (split) {
+                // First letter that is on a later line
+                let lo = i + 1, hi = b;
+                while (lo < hi) {
+                  const mid = (lo + hi) >> 1;
+                  const rm = rectOf(tn, mid);
+                  if (rm && rm.top > r0.top + lineH * 0.5) hi = mid; else lo = mid + 1;
+                }
+                j = lo;
+              }
+              const L = lineAt(r0.top);
+              const seg = { node: tn, s: i, e: j };
+              if (own) L.segs.push(seg);
+              L.last = seg;
+              L.count += j - i;
+              i = j;
+            }
+          }
+        }
+        return lines;
+      };
+
+      // Wraps the line's own text in spans with extra letter spacing (negative to tighten)
+      const wrapLine = (L: Line, extraPx: number): HTMLElement[] => {
+        const segs = L.segs.filter(sg => sg.e > sg.s);
+        const made: HTMLElement[] = [];
+        // From the end backwards, so earlier offsets in the same text node stay valid
+        for (let k = segs.length - 1; k >= 0; k--) {
+          const sg = segs[k];
+          const node = sg.node;
+          if (sg.e < node.length) node.splitText(sg.e);
+          const target = sg.s > 0 ? node.splitText(sg.s) : node;
+          const span = document.createElement('span');
+          span.className = 'mt-ls';
+          span.style.setProperty('letter-spacing', `${(pLs + extraPx).toFixed(2)}px`, 'important');
+          target.parentNode!.insertBefore(span, target);
+          span.appendChild(target);
+          made.push(span);
+        }
+        return made;
+      };
+      const unwrap = (spans: HTMLElement[]) => {
+        const parents = new Set<Node>();
+        for (const sp of spans) {
+          const parent = sp.parentNode;
+          if (!parent) continue;
+          while (sp.firstChild) parent.insertBefore(sp.firstChild, sp);
+          parent.removeChild(sp);
+          parents.add(parent);
+        }
+        parents.forEach(n => (n as Element).normalize?.());
+      };
+      const gapOf = (L: Line) => (L.spaces.length ? L.spaces.reduce((x, y) => x + y, 0) / L.spaces.length : 0);
+      const loose = fs * 0.42;
+      const target = Math.max(spaceNat * 1.1, fs * 0.3);
+
+      let lines = measure();
+      for (let i = 0; i < lines.length - 1 && i < 200; i++) {
+        const L = lines[i];
+        const gap = gapOf(L);
+        if (gap <= loose || !L.segs.length) continue;
+
+        // 1. Tighten the line slightly so the next syllable or word fits on it
+        //    (not in paged mode, where the pages are already counted)
+        let done = false;
+        for (const t of allowTighten ? [0.015, 0.03] : []) {
+          const spans = wrapLine(L, -t * fs);
+          const after = measure();
+          const A = after[i];
+          if (A && A.count > L.count && A.spaces.length && gapOf(A) <= Math.max(gap, loose) && gapOf(A) >= spaceNat * 0.9) {
+            lines = after;
+            done = true;
+            break;
+          }
+          unwrap(spans);
+          lines = measure();
+          if (lines[i]?.count !== L.count) { done = true; break; } // layout moved under us; leave it
+        }
+        if (done) continue;
+
+        // 2. Otherwise spread part of the slack between the letters (the last letter takes none,
+        //    so the right edge stays flush)
+        const own = lines[i].segs.map(sg => ({ ...sg }));
+        if (lines[i].last && own.length && own[own.length - 1].node === lines[i].last!.node && own[own.length - 1].e === lines[i].last!.e) {
+          own[own.length - 1].e -= 1;
+        }
+        let chars = 0;
+        for (const sg of own) for (let c = sg.s; c < sg.e; c++) if (sg.node.nodeValue![c] !== '­') chars++;
+        const extra = (gap - target) * lines[i].spaces.length - 1;
+        if (!chars || extra <= 0) continue;
+        const ls = Math.min(extra / chars, fs * 0.04);
+        if (ls < 0.3) continue;
+        const countBefore = lines[i].count, total = lines.length;
+        const spans = wrapLine({ ...lines[i], segs: own }, ls);
+        const after = measure();
+        // Safety: nothing may move to another line
+        if (after.length !== total || after[i]?.count !== countBefore) {
+          unwrap(spans);
+          lines = measure();
+        } else {
+          lines = after;
+        }
+      }
+    };
+
+    // Every trial change inside a paragraph would make the browser lay out the whole chapter
+    // again before the next measurement. So while we work, each paragraph is fenced off with
+    // its current height: then only the paragraph itself is laid out again.
+    // Loose lines are evened out near what is on screen only; in paged mode without moving
+    // any line, so the counted pages stay valid
+    const paged = isPagedModeRef.current;
+    const slices = pageSlicesRef.current;
+    let near: ((p: HTMLElement) => boolean) | null = null;
+    if (paged && slices.length && contentRef.current) {
+      const cur = Math.min(pageIndexRef.current, slices.length - 1);
+      const from = slices[Math.max(0, cur - 1)].startY, to = slices[Math.min(slices.length - 1, cur + 1)].endY;
+      const top0 = contentRef.current.getBoundingClientRect().top;
+      near = p => {
+        const r = p.getBoundingClientRect();
+        return r.bottom - top0 >= from && r.top - top0 <= to;
+      };
+    }
+    const wantLoose = (p: HTMLElement) => p.dataset.looseKey !== currentConfigKey && (!paged || (near !== null && near(p)));
+    let lastMax = 0;
+    const looseThreshold = (p: HTMLElement) => (parseFloat(window.getComputedStyle(p).fontSize) || 16) * 0.42;
+    const todo = elements.filter(p => p.dataset.microtypedKey !== currentConfigKey || wantLoose(p));
+    const heights = todo.map(p => p.getBoundingClientRect().height);
+    const fenced: { p: HTMLElement; contain: string; height: string }[] = [];
+    todo.forEach((p, i) => {
+      fenced.push({ p, contain: p.style.getPropertyValue('contain'), height: p.style.getPropertyValue('height') });
+      p.style.setProperty('contain', 'size layout style');
+      p.style.setProperty('height', `${heights[i]}px`);
+    });
+
+    todo.forEach((p) => {
+      const loose = wantLoose(p);
+      if (p.dataset.microtypedKey === currentConfigKey) {
+        if (loose) {
+          p.dataset.looseKey = currentConfigKey;
+          if (parseFloat(p.dataset.mtMax || '0') > looseThreshold(p)) {
+            try { fixLooseLines(p, !paged); } catch { unwrapLooseLines(p); }
+          }
+        }
+        return;
+      }
+
+      const text = p.textContent ? p.textContent.trim() : '';
+      if (text.length < 10) {
+          p.dataset.microtypedKey = currentConfigKey;
+          p.dataset.looseKey = currentConfigKey;
+          return;
+      }
+
+      unwrapLooseLines(p);
+      p.style.removeProperty('letter-spacing');
+      p.style.removeProperty('font-stretch');
+      p.style.removeProperty('font-variation-settings');
+
+      const initialMax = getMaxSpaceInElement(p);
+      const computedFs = parseFloat(window.getComputedStyle(p).fontSize) || (fontSize * 16) || 18;
+      
+      // Thresholds: ideal justified space width is ~0.26-0.30em.
+      // Spaces exceeding ~0.34em start creating noticeable gaps ("дыры").
+      const wordSpaceThreshold = Math.max(5.4, computedFs * 0.34);
+      const targetWordSpace = Math.max(4.6, computedFs * 0.28);
+
+      if (initialMax > wordSpaceThreshold) {
+        let bestCand: typeof candidates[0] | null = null;
+        let lowestMax = initialMax;
+        lastMax = initialMax;
+
+        const measured = new Map<number, number>();
+        const tryCand = (k: number) => {
+          const cand = candidates[k];
+          p.style.setProperty('letter-spacing', cand.ls, 'important');
+          p.style.setProperty('font-stretch', cand.stretch, 'important');
+          p.style.setProperty('font-variation-settings', `"wdth" ${cand.wdth}, "kern" 1, "liga" 1, "calt" 1, "locl" 1`, 'important');
+          const curMax = getMaxSpaceInElement(p);
+          measured.set(k, curMax);
+          return curMax;
+        };
+        // The earliest (mildest) level that closes the gap, found by bisection; if even the
+        // strongest one does not close it, the strongest one if it helps
+        const last = candidates.length - 1;
+        if (tryCand(last) <= targetWordSpace) {
+          let lo = 0, hi = last;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (tryCand(mid) <= targetWordSpace) hi = mid; else lo = mid + 1;
+          }
+          bestCand = candidates[lo];
+          lowestMax = measured.get(lo)!;
+        } else if (measured.get(last)! < lowestMax) {
+          bestCand = candidates[last];
+          lowestMax = measured.get(last)!;
+        }
+
+        // Apply only if it genuinely fixed/reduced the gap by at least 0.5px
+        if (bestCand && (lowestMax < initialMax - 0.5)) {
+          p.style.setProperty('letter-spacing', bestCand.ls, 'important');
+          p.style.setProperty('font-stretch', bestCand.stretch, 'important');
+          p.style.setProperty('font-variation-settings', `"wdth" ${bestCand.wdth}, "kern" 1, "liga" 1, "calt" 1, "locl" 1`, 'important');
+          lastMax = lowestMax;
+        } else {
+          p.style.removeProperty('letter-spacing');
+          p.style.removeProperty('font-stretch');
+          p.style.removeProperty('font-variation-settings');
+        }
+      }
+
+      p.dataset.microtypedKey = currentConfigKey;
+      // Widest space left, to skip paragraphs without loose lines
+      const left = initialMax > wordSpaceThreshold ? (p.style.getPropertyValue('letter-spacing') ? lastMax : initialMax) : initialMax;
+      p.dataset.mtMax = left.toFixed(1);
+      if (loose) {
+        p.dataset.looseKey = currentConfigKey;
+        if (left > looseThreshold(p)) {
+          try { fixLooseLines(p, !paged); } catch { unwrapLooseLines(p); }
+        }
+      }
+    });
+
+    for (const f of fenced) {
+      if (f.contain) f.p.style.setProperty('contain', f.contain); else f.p.style.removeProperty('contain');
+      if (f.height) f.p.style.setProperty('height', f.height); else f.p.style.removeProperty('height');
+    }
+  }, [fontSize, isBionic, readerFont, isStyledMode]);
+
+  const optimizeTypography = React.useCallback(() => {
+    if (!contentRef.current) return;
+    const paragraphs = Array.from(contentRef.current.querySelectorAll<HTMLElement>('p, blockquote, li, div.stanza, p.verse'));
+    if (!paragraphs.length) return;
+
+    if (isPagedModeRef.current) {
+      optimizeTypographyElements(paragraphs);
+    } else {
+      const winHeight = window.innerHeight || 800;
+      const vBuffer = 800;
+      const visibleParagraphs = paragraphs.filter((p) => {
+          const rect = p.getBoundingClientRect();
+          return rect.bottom >= -vBuffer && rect.top <= winHeight + vBuffer;
+      });
+      optimizeTypographyElements(visibleParagraphs);
+    }
+  }, [optimizeTypographyElements]);
+
+  // IntersectionObserver removed for paged mode to prevent reflows during pagination.
+
+  useEffect(() => {
+    lastProgressRef.current = initialProgressRatio;
+  }, [initialProgressRatio]);
+
+  const getAvailableHeight = React.useCallback(() => {
+    if (!containerRef.current) return 550;
+    const container = containerRef.current;
+    const screenH = container.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 800);
+    
+    // Read safe area insets
+    let sat = 0, sab = 0;
+    if (typeof window !== 'undefined') {
+        const style = getComputedStyle(document.documentElement);
+        sat = parseInt(style.getPropertyValue('--sat')) || 0;
+        sab = parseInt(style.getPropertyValue('--sab')) || 0;
+    }
+
+    // Real top and bottom curtain heights (80px top header, 112px bottom footer)
+    const topCurtainH = 80;
+    const bottomCurtainH = 112;
+    // Exactly 1 empty line height based on current font size (1.6 line-height)
+    // On cover page, font size is strictly locked so font scaling does not alter layout or slice heights
+    const fontSizePx = isCoverPage ? 16 : (fontSize || 1) * 16;
+    const oneLineH = isCoverPage ? 20 : Math.round(fontSizePx * 1.6);
+    
+    // Available text height = screen height minus top/bottom curtains, safe areas, and 1 empty line space at top & bottom
+    const maxTextH = screenH - topCurtainH - bottomCurtainH - sat - sab - (oneLineH * 2);
+    return Math.max(160, maxTextH);
+  }, [fontSize, isCoverPage]);
+
+  const calculatePageSlices = React.useCallback(() => {
+    if (!contentRef.current || !containerRef.current) return [{ startY: 0, endY: 0, textHeight: 500 }];
+    const content = contentRef.current;
+    const availableH = getAvailableHeight();
+
+    if (isCoverPage) {
+      return [{ startY: 0, endY: availableH, textHeight: availableH }];
+    }
+
+    // Reset transform to 'none' during measurement so getBoundingClientRect()
+    // evaluates pure, untransformed layout coordinates without subpixel artifacts
+    const savedTransform = content.style.transform;
+    content.style.transform = 'none';
+
+    const contentRect = content.getBoundingClientRect();
+    const contentTop = contentRect.top;
+
+    interface LineBox {
+      top: number;
+      bottom: number;
+      isHeading: boolean;
+    }
+
+    const boxes: LineBox[] = [];
+
+    // Query all candidate content elements across the chapter
+    const candidateElements = Array.from(content.querySelectorAll<HTMLElement>(
+      'p, h1, h2, h3, h4, h5, h6, blockquote, li, img, hr, div, table, tr, th, td, pre, dt, dd, .empty-line, div.stanza, p.verse, div.book-cover-page'
+    ));
+
+    const isLeafContent = (el: HTMLElement) => {
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'img' || tag === 'hr') return true;
+
+      // Check if it contains child block elements
+      const hasChildBlock = Boolean(el.querySelector('p, h1, h2, h3, h4, h5, h6, blockquote, li, img, hr, div, table, tr, th, td, pre'));
+      if (hasChildBlock) return false;
+
+      // Has no child blocks: check if it has visible text or image
+      const text = (el.textContent || '').replace(/[\s\u00A0\u200B-\u200D\uFEFF]+/g, '');
+      return text.length > 0 || Boolean(el.querySelector('img'));
+    };
+
+    const range = document.createRange();
+
+    for (let i = 0; i < candidateElements.length; i++) {
+      const el = candidateElements[i];
+      if (!isLeafContent(el)) continue;
+
+      const tag = el.tagName.toLowerCase();
+      const isImg = tag === 'img';
+      const isHr = tag === 'hr';
+      const isHeading = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag) || 
+                        el.classList.contains('title') || 
+                        el.classList.contains('injected-title') ||
+                        el.classList.contains('book-cover-title') ||
+                        Boolean(el.closest('h1, h2, h3, h4, h5, h6, .title, .injected-title'));
+
+      const elRect = el.getBoundingClientRect();
+      const elTop = Math.round(elRect.top - contentTop);
+      const elBottom = Math.round(elRect.bottom - contentTop);
+
+      if (isImg || isHr) {
+        if (elRect.height > 0) {
+          boxes.push({
+            top: elTop,
+            bottom: elBottom,
+            isHeading: false
+          });
+        }
+      } else {
+        try {
+          range.selectNodeContents(el);
+          const rawRects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
+          if (rawRects.length > 0) {
+            // Map to contentTop coordinates
+            const mappedRects = rawRects.map(r => ({
+              top: Math.round(r.top - contentTop),
+              bottom: Math.round(r.bottom - contentTop),
+              left: Math.round(r.left),
+              right: Math.round(r.right)
+            }));
+
+            // Sort top then left
+            mappedRects.sort((a, b) => {
+              if (Math.abs(a.top - b.top) > 4) {
+                return a.top - b.top;
+              }
+              return a.left - b.left;
+            });
+
+            // Cluster fragments into unified horizontal visual lines
+            const linesInEl: LineBox[] = [];
+            for (const mr of mappedRects) {
+              const mrH = mr.bottom - mr.top;
+              const mrCenter = (mr.top + mr.bottom) / 2;
+
+              const line = linesInEl.find(l => {
+                const lH = l.bottom - l.top;
+                const lCenter = (l.top + l.bottom) / 2;
+                const overlap = Math.min(l.bottom, mr.bottom) - Math.max(l.top, mr.top);
+                const minH = Math.min(lH, mrH);
+                return overlap > minH * 0.35 || Math.abs(lCenter - mrCenter) < minH * 0.45;
+              });
+
+              if (line) {
+                line.top = Math.min(line.top, mr.top);
+                line.bottom = Math.max(line.bottom, mr.bottom);
+              } else {
+                linesInEl.push({
+                  top: mr.top,
+                  bottom: mr.bottom,
+                  isHeading
+                });
+              }
+            }
+
+            // If it's a heading element, ensure the lines box covers the heading's borders and padding
+            if (isHeading && linesInEl.length > 0) {
+              const lastLine = linesInEl[linesInEl.length - 1];
+              lastLine.bottom = Math.max(lastLine.bottom, elBottom);
+              const firstLine = linesInEl[0];
+              firstLine.top = Math.min(firstLine.top, elTop);
+            }
+
+            boxes.push(...linesInEl);
+          } else {
+            if (elRect.height > 0) {
+              boxes.push({
+                top: elTop,
+                bottom: elBottom,
+                isHeading
+              });
+            }
+          }
+        } catch {
+          if (elRect.height > 0) {
+            boxes.push({
+              top: elTop,
+              bottom: elBottom,
+              isHeading
+            });
+          }
+        }
+      }
+    }
+
+    // Restore saved transform immediately after measuring
+    content.style.transform = savedTransform;
+
+    if (boxes.length === 0) {
+      const totalH = Math.max(availableH, content.scrollHeight);
+      const count = Math.max(1, Math.ceil(totalH / availableH));
+      const fallbackSlices: { startY: number; endY: number; textHeight: number }[] = [];
+      for (let i = 0; i < count; i++) {
+        fallbackSlices.push({
+          startY: i * availableH,
+          endY: (i + 1) * availableH,
+          textHeight: availableH
+        });
+      }
+      return fallbackSlices;
+    }
+
+    // Sort all boxes vertically
+    boxes.sort((a, b) => a.top - b.top);
+
+    // Merge overlapping boxes on the same horizontal line
+    const mergedBoxes: LineBox[] = [];
+    for (const b of boxes) {
+      if (mergedBoxes.length === 0) {
+        mergedBoxes.push({ ...b });
+        continue;
+      }
+      const prev = mergedBoxes[mergedBoxes.length - 1];
+      const prevH = prev.bottom - prev.top;
+      const bH = b.bottom - b.top;
+      const overlap = Math.min(prev.bottom, b.bottom) - Math.max(prev.top, b.top);
+      const minH = Math.min(prevH, bH);
+
+      if (overlap > minH * 0.5) {
+        prev.top = Math.min(prev.top, b.top);
+        prev.bottom = Math.max(prev.bottom, b.bottom);
+        if (b.isHeading) prev.isHeading = true;
+      } else {
+        mergedBoxes.push({ ...b });
+      }
+    }
+
+    const fontSizePx = (fontSize || 1) * 16;
+    // Interline offset (~3px for 16px font) to sit cleanly in the leading gap
+    // between previous line descenders and current line text
+    const interlineOffset = Math.ceil(fontSizePx * 0.18);
+
+    const slices: { startY: number; endY: number; textHeight: number }[] = [];
+    let boxIndex = 0;
+
+    while (boxIndex < mergedBoxes.length) {
+      const firstBox = mergedBoxes[boxIndex];
+      // Page 0 starts at 0 if the first line is near the top;
+      // Subsequent pages start at firstBox.top + interlineOffset so previous line descenders are pushed above Y=0
+      const pageStartY = (boxIndex === 0 && firstBox.top < 32) 
+        ? 0 
+        : (firstBox.top + interlineOffset);
+
+      let lastFittingIndex = boxIndex;
+
+      for (let j = boxIndex; j < mergedBoxes.length; j++) {
+        const curBox = mergedBoxes[j];
+        // Test if curBox fits within availableH when given interlineOffset clearance
+        const proposedEnd = curBox.bottom + interlineOffset;
+        const proposedTextH = proposedEnd - pageStartY;
+
+        if (proposedTextH <= availableH) {
+          lastFittingIndex = j;
+        } else if (j === boxIndex) {
+          // Single oversized element taller than available viewport
+          lastFittingIndex = j;
+          break;
+        } else {
+          break;
+        }
+      }
+
+      // Prevent orphan heading at the very bottom of the page
+      let finalIndex = lastFittingIndex;
+      if (finalIndex > boxIndex && finalIndex < mergedBoxes.length - 1) {
+        let testIdx = finalIndex;
+        while (testIdx >= boxIndex && mergedBoxes[testIdx].isHeading) {
+          testIdx--;
+        }
+        if (testIdx >= boxIndex && testIdx < finalIndex) {
+          finalIndex = testIdx;
+        }
+      }
+
+      // pageEndY is placed at curBottom + interlineOffset, cleanly including current line descenders
+      // while staying above the next line's text
+      const pageEndY = mergedBoxes[finalIndex].bottom + interlineOffset;
+      const textHeight = Math.max(20, pageEndY - pageStartY);
+
+      slices.push({
+        startY: pageStartY,
+        endY: pageEndY,
+        textHeight
+      });
+
+      // Next page starts strictly at the next line
+      boxIndex = finalIndex + 1;
+    }
+
+    const finalSlices = slices.length > 0 ? slices : [{ startY: 0, endY: availableH, textHeight: availableH }];
+    return finalSlices;
+  }, [getAvailableHeight, isCoverPage, fontSize]);
+
+  const updatePageCount = React.useCallback(() => {
+    if (!containerRef.current || !contentRef.current) return;
+
+    // Microtype paragraphs before calculating page slices so heights and wrap coordinates are precise
+    optimizeTypography();
+
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    if (width <= 0) return;
+    if (containerWidthRef.current !== width) {
+      containerWidthRef.current = width;
+      setContainerWidth(width);
+    }
+
+    const currentAvailH = getAvailableHeight();
+    if (currentAvailH > 100) {
+      setAvailableHeight(prev => prev === currentAvailH ? prev : currentAvailH);
+    }
+
+    if (isCoverPage) {
+      const coverSlices = [{ startY: 0, endY: currentAvailH }];
+      if (!areSlicesEqual(pageSlicesRef.current, coverSlices)) {
+        pageSlicesRef.current = coverSlices;
+        setPageSlices(coverSlices);
+      }
+      setTotalPages(prev => prev === 1 ? prev : 1);
+      setPageIndex(prev => prev === 0 ? prev : 0);
+      return;
+    }
+
+    const newSlices = calculatePageSlices();
+    
+    if (!areSlicesEqual(pageSlicesRef.current, newSlices)) {
+      pageSlicesRef.current = newSlices;
+      setPageSlices(newSlices);
+    }
+    setTotalPages(prev => prev === newSlices.length ? prev : newSlices.length);
+
+    if (highlightText) return;
+
+    const savedScrollTop = lastScrollTopRef.current;
+    if (savedScrollTop > 0 && newSlices.length > 1) {
+      const matchedIdx = newSlices.findIndex((s, idx) => {
+        const nextS = newSlices[idx + 1];
+        return nextS ? (savedScrollTop >= s.startY - 10 && savedScrollTop < nextS.startY - 10) : true;
+      });
+      if (matchedIdx !== -1) {
+        setPageIndex(matchedIdx);
+        lastProgressRef.current = newSlices.length > 1 ? matchedIdx / (newSlices.length - 1) : 0;
+        return;
+      }
+    }
+
+    const currentProgress = lastProgressRef.current;
+    if (currentProgress >= 0.99) {
+      const target = Math.max(0, newSlices.length - 1);
+      setPageIndex(prev => prev === target ? prev : target);
+    } else if (currentProgress <= 0.001) {
+      setPageIndex(prev => prev === 0 ? prev : 0);
+    } else {
+      const targetPage = Math.min(newSlices.length - 1, Math.max(0, Math.round(currentProgress * (newSlices.length - 1))));
+      setPageIndex(prev => prev === targetPage ? prev : targetPage);
+    }
+  }, [calculatePageSlices, getAvailableHeight, highlightText, isCoverPage, optimizeTypography]);
+
+  const updatePageCountRef = useRef(updatePageCount);
+  updatePageCountRef.current = updatePageCount;
+
+  // Counting the pages of a long chapter takes a while: then the spinner is shown first
+  const isHeavyContent = () => (contentRef.current?.textContent?.length || 0) > HEAVY_CHAPTER;
+
+  useLayoutEffect(() => {
+    if (isPagedMode && !isHeavyContent()) {
+      updatePageCountRef.current();
+    }
+  }, [fontSize, isPagedMode]);
+
+  useEffect(() => {
+    let calcTimer: NodeJS.Timeout | null = null;
+    let workTimer: NodeJS.Timeout | null = null;
+    let frameId = 0;
+    if (isPagedMode) {
+      const heavy = isHeavyContent();
+      if (heavy) setIsCalculating(true);
+      calcTimer = setTimeout(() => {
+        setIsCalculating(true);
+      }, 30);
+
+      const work = () => {
+        try {
+          updatePageCountRef.current();
+        } finally {
+          if (calcTimer) clearTimeout(calcTimer);
+          requestAnimationFrame(() => {
+            setIsCalculating(false);
+          });
+        }
+      };
+      // Two frames: the spinner is committed by React after the first one
+      frameId = requestAnimationFrame(() => {
+        if (heavy) frameId = requestAnimationFrame(() => { workTimer = setTimeout(work, 0); });
+        else work();
+      });
+    }
+
+    // Also after the next paint, so the spinner shows before this work starts
+    let timer: NodeJS.Timeout | null = null;
+    let typoFrame = requestAnimationFrame(() => typoFrame = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        optimizeTypography();
+        if (isChapterSwitchingRef.current) {
+          isChapterSwitchingRef.current = false;
+        }
+      }, 40);
+    }));
+
+    return () => {
+      if (calcTimer) clearTimeout(calcTimer);
+      if (workTimer) clearTimeout(workTimer);
+      if (frameId) cancelAnimationFrame(frameId);
+      if (frameId) setIsCalculating(false);
+      cancelAnimationFrame(typoFrame);
+      if (timer) clearTimeout(timer);
+    };
+  }, [isPagedMode, processedContent, fontSize, readerFont, isBionic, optimizeTypography]);
+
+  useLayoutEffect(() => {
+    if (isChapterSwitchingRef.current) {
+      const id = requestAnimationFrame(() => {
+        setTimeout(() => {
+          isChapterSwitchingRef.current = false;
+        }, 50);
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [propChapterIndex]);
+
+  // Make blocks/paragraphs outside the target page slice completely invisible
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const children = contentRef.current.children;
+
+    if (!isPagedMode || pageSlices.length === 0 || isCoverPage) {
+      for (let i = 0; i < children.length; i++) {
+        (children[i] as HTMLElement).style.visibility = '';
+      }
+      return;
+    }
+
+    const currentSlice = pageSlices[pageIndex];
+    if (!currentSlice) return;
+
+    const startY = currentSlice.startY;
+    const endY = currentSlice.endY;
+
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i] as HTMLElement;
+      const elTop = el.offsetTop;
+      const elBottom = elTop + el.offsetHeight;
+
+      // If element is completely above startY or completely below endY, hide it completely
+      if (elBottom <= startY + 2 || elTop >= endY - 2) {
+        el.style.visibility = 'hidden';
+      } else {
+        el.style.visibility = 'visible';
+      }
+    }
+  }, [pageIndex, pageSlices, isPagedMode, isCoverPage, processedContent]);
+
+  useEffect(() => {
+    const handleIdle = () => optimizeTypography();
+    const idleId = typeof window !== 'undefined' && 'requestIdleCallback' in window
+      ? (window as any).requestIdleCallback(handleIdle, { timeout: 300 })
+      : setTimeout(handleIdle, 180);
+
+    return () => {
+      if (typeof window !== 'undefined' && 'cancelIdleCallback' in window && typeof idleId === 'number') {
+        (window as any).cancelIdleCallback(idleId);
+      } else {
+        clearTimeout(idleId as any);
+      }
+    };
+  }, [isPagedMode, pageIndex, propChapterIndex, optimizeTypography]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    const contentEl = contentRef.current;
+    if (!el) return;
+    let resizeTimer: any = null;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        optimizeTypography();
+        if (isPagedModeRef.current) {
+          updatePageCountRef.current();
+        }
+      }, 50);
+    });
+    observer.observe(el);
+    if (contentEl) {
+      observer.observe(contentEl);
+    }
+    return () => {
+      clearTimeout(resizeTimer);
+      observer.disconnect();
+    };
+  }, [optimizeTypography, processedContent]);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        optimizeTypography();
+        if (isPagedModeRef.current) {
+          updatePageCountRef.current();
+        }
+      });
+    }
+  }, [readerFont, optimizeTypography]);
+
+  const handlePageTurn = React.useCallback((direction: 'next' | 'prev') => {
+    if (direction === 'next') {
+      if (pageIndex < totalPages - 1) {
+        const nextIdx = pageIndex + 1;
+        setIsFlipping(true);
+        setFlipOffset(-24);
+        setPageOpacity(0);
+        setTimeout(() => {
+          setPageIndex(nextIdx);
+          setFlipOffset(24);
+          const ratio = totalPages > 1 ? nextIdx / (totalPages - 1) : 0;
+          lastProgressRef.current = ratio;
+          onProgressUpdate(ratio);
+          requestAnimationFrame(() => {
+            setFlipOffset(0);
+            setPageOpacity(1);
+            setTimeout(() => setIsFlipping(false), 190);
+          });
+        }, 110);
+      } else if (propChapterIndex < book.chapters.length - 1) {
+        setIsFlipping(true);
+        setPageOpacity(0);
+        setTimeout(() => {
+          isChapterSwitchingRef.current = true;
+          setPageIndex(0);
+          lastProgressRef.current = 0;
+          onProgressUpdate(0);
+          onChapterChange(propChapterIndex + 1, 'start');
+          setTimeout(() => {
+            setIsFlipping(false);
+            setPageOpacity(1);
+          }, 150);
+        }, 120);
+      }
+    } else {
+      if (pageIndex > 0) {
+        const prevIdx = pageIndex - 1;
+        setIsFlipping(true);
+        setFlipOffset(24);
+        setPageOpacity(0);
+        setTimeout(() => {
+          setPageIndex(prevIdx);
+          setFlipOffset(-24);
+          const ratio = totalPages > 1 ? prevIdx / (totalPages - 1) : 0;
+          lastProgressRef.current = ratio;
+          onProgressUpdate(ratio);
+          requestAnimationFrame(() => {
+            setFlipOffset(0);
+            setPageOpacity(1);
+            setTimeout(() => setIsFlipping(false), 190);
+          });
+        }, 110);
+      } else if (propChapterIndex > 0) {
+        setIsFlipping(true);
+        setPageOpacity(0);
+        setTimeout(() => {
+          isChapterSwitchingRef.current = true;
+          lastProgressRef.current = 1;
+          onProgressUpdate(1);
+          onChapterChange(propChapterIndex - 1, 'end');
+          setTimeout(() => {
+            setIsFlipping(false);
+            setPageOpacity(1);
+          }, 150);
+        }, 120);
+      }
+    }
+  }, [pageIndex, totalPages, propChapterIndex, book.chapters.length, onProgressUpdate, onChapterChange]);
+
+  // Reading aloud: let the voice find the text and keep the spoken word on screen
+  const readAloudRef = useRef({ handlePageTurn, propChapterIndex, chapterCount: book.chapters.length, onChapterChange, onProgressUpdate, uiVisible, book, appStyle, isStyledMode });
+  readAloudRef.current = { handlePageTurn, propChapterIndex, chapterCount: book.chapters.length, onChapterChange, onProgressUpdate, uiVisible, book, appStyle, isStyledMode };
+  useEffect(() => {
+    let lastTurn = 0;
+    registerReader({
+      root: () => contentRef.current,
+      viewport: () => {
+        if (isPagedModeRef.current) return pagesContainerRef.current?.getBoundingClientRect() || null;
+        const r = containerRef.current?.getBoundingClientRect();
+        if (!r) return null;
+        // Leave out the parts covered by the top bar and by the bottom panel with the player
+        const top = r.top + 90, bottom = r.bottom - (readAloudRef.current.uiVisible ? 190 : 40);
+        return new DOMRect(r.left, top, r.width, Math.max(50, bottom - top));
+      },
+      reveal: (rect) => {
+        if (isPagedModeRef.current) {
+          const content = contentRef.current;
+          const slices = pageSlicesRef.current;
+          if (!content || slices.length === 0 || Date.now() - lastTurn < 700) return;
+          const y = rect.top - content.getBoundingClientRect().top;
+          const idx = slices.findIndex((sl, i) => (slices[i + 1] ? y >= sl.startY - 2 && y < slices[i + 1].startY - 2 : true));
+          if (idx < 0 || idx === pageIndexRef.current) return;
+          lastTurn = Date.now();
+          if (idx === pageIndexRef.current + 1) readAloudRef.current.handlePageTurn('next');
+          else {
+            setPageIndex(idx);
+            const ratio = slices.length > 1 ? idx / (slices.length - 1) : 0;
+            lastProgressRef.current = ratio;
+            readAloudRef.current.onProgressUpdate(ratio);
+          }
+          return;
+        }
+        const c = containerRef.current;
+        if (!c) return;
+        const r = c.getBoundingClientRect();
+        c.scrollBy({ top: rect.top - (r.top + 90 + (r.height - 280) * 0.2), behavior: 'smooth' });
+      },
+      nextChapter: () => {
+        const { propChapterIndex: i, chapterCount, onChapterChange: go } = readAloudRef.current;
+        if (i >= chapterCount - 1) return false;
+        isChapterSwitchingRef.current = true;
+        setPageIndex(0);
+        go(i + 1, 'start');
+        return true;
+      },
+      chapter: () => readAloudRef.current.propChapterIndex,
+      chapterCount: () => readAloudRef.current.chapterCount,
+      chapterHtml: (i) => {
+        const { book: b, isStyledMode: styled } = readAloudRef.current;
+        const raw = b.chapters[i]?.content;
+        return raw ? transformChapterContent(raw, false, false, false, styled) : '';
+      },
+      chapterTitle: (i) => readAloudRef.current.book.chapters[i]?.name || '',
+      openChapter: (i) => {
+        const { propChapterIndex: cur, onChapterChange: go } = readAloudRef.current;
+        if (i === cur) return;
+        isChapterSwitchingRef.current = true;
+        setPageIndex(0);
+        go(i, 'start');
+      },
+      info: async () => {
+        const { book: b, appStyle: style } = readAloudRef.current;
+        return { title: b.title, subtitle: b.title, cover: await coverData(b.coverUrl), color: accentOf(style) };
+      },
+    });
+    return () => registerReader(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isPagedMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault();
+        handlePageTurn('next');
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        handlePageTurn('prev');
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handlePageTurn('prev');
+        } else {
+          handlePageTurn('next');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPagedMode, handlePageTurn]);
+
+  const handlePagedTouchStart = (e: React.TouchEvent) => {
+    if (!isPagedMode || isRsvpMode) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchStartTime.current = Date.now();
+    isDraggingRef.current = true;
+    setIsDragging(true);
+  };
+
+  const handlePagedTouchMove = (e: React.TouchEvent) => {
+    if (!isPagedMode || !isDraggingRef.current || isRsvpMode) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStartX.current;
+    const deltaY = currentY - touchStartY.current;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+      dragOffsetRef.current = deltaX;
+      setDragOffset(deltaX);
+    }
+  };
+
+  const handlePagedTouchEnd = () => {
+    if (!isPagedMode || !isDraggingRef.current || isRsvpMode) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+
+    const dt = Date.now() - touchStartTime.current;
+    const offset = dragOffsetRef.current;
+    const velocity = Math.abs(offset) / Math.max(1, dt);
+
+    if (offset < -40 || (offset < -15 && velocity > 0.3)) {
+      handlePageTurn('next');
+    } else if (offset > 40 || (offset > 15 && velocity > 0.3)) {
+      handlePageTurn('prev');
+    }
+    
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
+  };
+
+  // Initialize Hypher
+  const hyphenatorRef = useRef<any>(null);
+  if (!hyphenatorRef.current) {
+      hyphenatorRef.current = new Hypher(ruPattern);
+  }
+
+  // --- HIGHLIGHTING ---
+  useEffect(() => {
+      const root = isPagedMode ? pagedContentRef.current : containerRef.current;
+      if (!root || !processedContent) return;
+
+      const oldMarks = root.querySelectorAll('mark.search-highlight');
+      oldMarks.forEach(m => {
+          const parent = m.parentNode;
+          if (parent) {
+              while (m.firstChild) parent.insertBefore(m.firstChild, m);
+              parent.removeChild(m);
+          }
+      });
+      root.normalize(); 
+      
+      if (!highlightText || highlightMatchIndex === -1) return;
+
+      const getBlockParent = (node: Node): Node | null => {
+          let curr: Node | null = node.parentNode;
+          while (curr && curr !== root) {
+              if (curr.nodeType === Node.ELEMENT_NODE) {
+                  const tag = (curr as Element).tagName.toLowerCase();
+                  if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'blockquote', 'section', 'article', 'tr', 'br'].includes(tag)) {
+                      return curr;
+                  }
+              }
+              curr = curr.parentNode;
+          }
+          return curr;
+      };
+
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      const textNodes: Text[] = [];
+      let n;
+      while (n = walker.nextNode()) textNodes.push(n as Text);
+
+      let virtualText = "";
+      const map: ({ node: Text; offset: number } | null)[] = [];
+
+      for (let idx = 0; idx < textNodes.length; idx++) {
+          const node = textNodes[idx];
+          const val = node.nodeValue || "";
+          for (let i = 0; i < val.length; i++) {
+              const char = val[i];
+              const code = char.charCodeAt(0);
+              // Skip soft hyphens and invisible formatting characters
+              if (code === 173 || code === 8203 || code === 8204 || code === 8205 || code === 65279) {
+                  continue; 
+              }
+              virtualText += char;
+              map.push({ node, offset: i });
+          }
+
+          const nextNode = textNodes[idx + 1];
+          if (nextNode) {
+              const isDifferentBlock = getBlockParent(node) !== getBlockParent(nextNode);
+              if (isDifferentBlock) {
+                  if (virtualText.length > 0 && !/\s$/.test(virtualText)) {
+                      virtualText += " ";
+                      map.push(null);
+                  }
+              }
+          }
+      }
+
+      const q = highlightText.trim().toLowerCase();
+      if (!q) return;
+
+      const vLower = virtualText.toLowerCase();
+      let startIndex = 0;
+      let foundCount = 0;
+      let foundRange: Range | null = null;
+      let firstAvailableRange: Range | null = null;
+
+      while (true) {
+          const idx = vLower.indexOf(q, startIndex);
+          if (idx === -1) break;
+
+          const startMap = map[idx];
+          const endIdx = idx + q.length - 1;
+          const endMap = map[endIdx];
+
+          if (startMap && endMap) {
+              try {
+                  const range = document.createRange();
+                  range.setStart(startMap.node, startMap.offset);
+                  range.setEnd(endMap.node, endMap.offset + 1);
+                  if (!firstAvailableRange) {
+                      firstAvailableRange = range;
+                  }
+                  if (foundCount === highlightMatchIndex) {
+                      foundRange = range;
+                      break;
+                  }
+              } catch (e) {
+                  // Ignore invalid range
+              }
+          }
+          foundCount++;
+          startIndex = idx + q.length;
+      }
+
+      if (!foundRange && firstAvailableRange) {
+          foundRange = firstAvailableRange;
+      }
+
+      if (foundRange) {
+          const mark = document.createElement('mark');
+          mark.className = "search-highlight";
+          mark.id = "current-highlight";
+          
+          const highlightColors = getSearchHighlightColors(appStyle, theme);
+          mark.style.backgroundColor = highlightColors.bg;
+          mark.style.outline = `2px solid ${highlightColors.outline}`;
+          mark.style.outlineOffset = "1px";
+
+          try {
+              const contents = foundRange.extractContents();
+              mark.appendChild(contents);
+              foundRange.insertNode(mark);
+          } catch (e) {
+              try {
+                  foundRange.surroundContents(mark);
+              } catch (err) {
+                  try {
+                      foundRange.insertNode(mark);
+                  } catch (err2) {}
+              }
+          }
+
+          contentRestoredRef.current = true;
+
+          const performScrollOrPage = () => {
+              if (isPagedMode) {
+                  const contentEl = contentRef.current;
+                  if (!contentEl) return;
+                  const markEl = contentEl.querySelector('#current-highlight') || mark;
+                  if (markEl && markEl.getBoundingClientRect) {
+                      const rect = markEl.getBoundingClientRect();
+                      const contentRect = contentEl.getBoundingClientRect();
+                      const markTop = rect.top - contentRect.top;
+                      if (pageSlices.length > 0) {
+                          const calculatedPage = pageSlices.findIndex((s, idx) => {
+                              const nextS = pageSlices[idx + 1];
+                              return nextS ? (markTop >= s.startY - 10 && markTop < nextS.startY - 10) : true;
+                          });
+                          if (calculatedPage !== -1) {
+                              setPageIndex(calculatedPage);
+                              const ratio = pageSlices.length > 1 ? calculatedPage / (pageSlices.length - 1) : 0;
+                              lastProgressRef.current = ratio;
+                              onProgressUpdate(ratio);
+                          }
+                      }
+                  }
+                  return;
+              }
+
+              const container = containerRef.current;
+              if (!container) return;
+
+              const markEl = container.querySelector('#current-highlight') || mark;
+              let targetTop = -1;
+
+              if (markEl && markEl.getBoundingClientRect) {
+                  const markRect = markEl.getBoundingClientRect();
+                  const containerRect = container.getBoundingClientRect();
+                  if (markRect.height > 0 || markRect.top > 0) {
+                      targetTop = container.scrollTop + (markRect.top - containerRect.top) - (container.clientHeight / 2);
+                  }
+              }
+
+              if (targetTop < 0 && foundRange) {
+                  try {
+                      const rangeRect = foundRange.getBoundingClientRect();
+                      const containerRect = container.getBoundingClientRect();
+                      if (rangeRect.height > 0) {
+                          targetTop = container.scrollTop + (rangeRect.top - containerRect.top) - (container.clientHeight / 2);
+                      }
+                  } catch (e) {}
+              }
+
+              if (targetTop >= 0) {
+                  container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+              } else if (markEl && markEl.scrollIntoView) {
+                  markEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              }
+          };
+
+          requestAnimationFrame(() => {
+              performScrollOrPage();
+              setTimeout(performScrollOrPage, 50);
+              setTimeout(performScrollOrPage, 150);
+              setTimeout(performScrollOrPage, 350);
+              setTimeout(performScrollOrPage, 700);
+          });
+      }
+  }, [processedContent, highlightText, highlightMatchIndex, isPagedMode, totalPages, containerWidth]);
+
+  const initialRatioRef = useRef(initialProgressRatio);
+  useEffect(() => { initialRatioRef.current = initialProgressRatio; }, [initialProgressRatio]);
+
+  const prevFontSizeRef = useRef(fontSize);
+  useEffect(() => {
+      if (prevFontSizeRef.current !== fontSize) {
+          prevFontSizeRef.current = fontSize;
+          if (!containerRef.current || !processedContent) return;
+          // Wait a tick for layout to recalculate with the new font size
+          requestAnimationFrame(() => {
+              if (!containerRef.current) return;
+              const { scrollHeight, clientHeight } = containerRef.current;
+              if (scrollHeight <= clientHeight) return;
+              const target = (scrollHeight - clientHeight) * initialRatioRef.current;
+              containerRef.current.scrollTop = target;
+          });
+      }
+  }, [fontSize, processedContent]);
+
+  // Anchor pinning when isBionic or isRsvpMode toggles to prevent layout shift
+  const prevIsBionicRef = useRef(isBionic);
+  const prevIsRsvpRef = useRef(isRsvpMode);
+  const bionicAnchorRef = useRef<{ index: number; offset: number } | null>(null);
+  const rsvpStartBlockIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+      const isBionicChanged = isBionic !== prevIsBionicRef.current;
+      const isRsvpChanged = isRsvpMode !== prevIsRsvpRef.current;
+      
+      if (isBionicChanged || isRsvpChanged) {
+          prevIsBionicRef.current = isBionic;
+          const wasRsvp = prevIsRsvpRef.current;
+          prevIsRsvpRef.current = isRsvpMode;
+          
+          const container = isPagedMode ? pagedContentRef.current : containerRef.current;
+          if (container) {
+              const containerRect = container.getBoundingClientRect();
+              const blocks = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'));
+              
+              let bestBlockIndex = -1;
+              let bestBlockOffset = 0;
+              
+              for (let i = 0; i < blocks.length; i++) {
+                  const block = blocks[i];
+                  const rect = block.getBoundingClientRect();
+                  if (isPagedMode) {
+                      if (rect.right > containerRect.left + 10 && rect.left < containerRect.right - 10) {
+                          bestBlockIndex = i;
+                          bestBlockOffset = rect.top - containerRect.top;
+                          break;
+                      }
+                  } else {
+                      if (rect.bottom > containerRect.top + 5) {
+                          bestBlockIndex = i;
+                          bestBlockOffset = rect.top - containerRect.top;
+                          break;
+                      }
+                  }
+              }
+              
+              if (bestBlockIndex !== -1) {
+                  bionicAnchorRef.current = { index: bestBlockIndex, offset: bestBlockOffset };
+                  
+                  if (isRsvpMode && !wasRsvp) {
+                      let rsvpBlockIdx = -1;
+                      for (let i = 0; i < blocks.length; i++) {
+                          const rect = blocks[i].getBoundingClientRect();
+                          if (isPagedMode) {
+                              if (rect.right > containerRect.left + 10 && rect.left < containerRect.right - 10) {
+                                  rsvpBlockIdx = i;
+                                  break;
+                              }
+                          } else {
+                              if (rect.top >= containerRect.top - 1.5) {
+                                  rsvpBlockIdx = i;
+                                  break;
+                              }
+                          }
+                      }
+                      if (rsvpBlockIdx === -1) {
+                          rsvpBlockIdx = bestBlockIndex;
+                      }
+                      rsvpStartBlockIndexRef.current = rsvpBlockIdx;
+                  }
+              }
+          }
+      }
+
+      // If RSVP mode is closed, clear the start block ref
+      if (!isRsvpMode) {
+          rsvpStartBlockIndexRef.current = null;
+      }
+  }, [isBionic, isRsvpMode]);
+
+  // Restore scroll anchor when content is re-rendered with new format
+  useEffect(() => {
+      if (bionicAnchorRef.current && containerRef.current) {
+          const container = containerRef.current;
+          const anchor = bionicAnchorRef.current;
+          
+          requestAnimationFrame(() => {
+              const containerRect = container.getBoundingClientRect();
+              const blocks = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'));
+              const targetBlock = blocks[anchor.index];
+              if (targetBlock) {
+                  const rect = targetBlock.getBoundingClientRect();
+                  const currentOffset = rect.top - containerRect.top;
+                  const diff = currentOffset - anchor.offset;
+                  container.scrollTop += diff;
+              }
+          });
+          bionicAnchorRef.current = null;
+      }
+  }, [processedContent]);
+
+  const prevIsPagedModeRef = useRef(isPagedMode);
+
+  // Restore scroll position instantly when switching between paged and scroll mode
+  useLayoutEffect(() => {
+    const wasPaged = prevIsPagedModeRef.current;
+    if (wasPaged === isPagedMode) return;
+    prevIsPagedModeRef.current = isPagedMode;
+
+    if (wasPaged && !isPagedMode && containerRef.current) {
+      const container = containerRef.current;
+      container.style.scrollBehavior = 'auto';
+
+      const currentSlice = pageSlicesRef.current[pageIndexRef.current];
+      if (currentSlice && currentSlice.startY > 0) {
+        container.scrollTop = currentSlice.startY;
+        lastScrollTopRef.current = currentSlice.startY;
+      } else {
+        const total = pageSlicesRef.current.length;
+        const pageRatio = total > 1 ? pageIndexRef.current / (total - 1) : 0;
+        const targetScroll = Math.max(0, (container.scrollHeight - container.clientHeight) * pageRatio);
+        container.scrollTop = targetScroll;
+        lastScrollTopRef.current = targetScroll;
+      }
+    } else if (!wasPaged && isPagedMode && containerRef.current) {
+      const container = containerRef.current;
+      const currentScrollTop = container.scrollTop;
+      if (currentScrollTop > 0) {
+        lastScrollTopRef.current = currentScrollTop;
+      }
+      const slices = pageSlicesRef.current;
+      if (slices.length > 1) {
+        const matchedIdx = slices.findIndex((s, idx) => {
+          const nextS = slices[idx + 1];
+          return nextS ? (lastScrollTopRef.current >= s.startY - 10 && lastScrollTopRef.current < nextS.startY - 10) : true;
+        });
+        if (matchedIdx !== -1) {
+          setPageIndex(matchedIdx);
+        }
+      }
+    }
+  }, [isPagedMode]);
+
+  // Scroll Restoration on initial load
+  useEffect(() => {
+     if (!containerRef.current || !processedContent || contentRestoredRef.current) return;
+     if (highlightText) return; 
+     
+     const el = containerRef.current;
+     requestAnimationFrame(() => {
+         el.style.scrollBehavior = 'auto';
+         const { scrollHeight, clientHeight } = el;
+         if (initialProgressRatio <= 0.001) {
+             el.scrollTop = 0;
+         } else {
+             if (scrollHeight <= clientHeight && initialProgressRatio > 0) return; 
+             const target = (scrollHeight - clientHeight) * initialProgressRatio;
+             el.scrollTop = target;
+         }
+         contentRestoredRef.current = true;
+     });
+  }, [processedContent, propChapterIndex, initialProgressRatio, highlightText, book.id]);
+
+  // Handle cross-chapter or internal hash/footnote targets
+  useEffect(() => {
+      if (!processedContent) return;
+      const targetId = (window as any).__pendingScrollTarget;
+      if (!targetId) return;
+
+      const runScroll = () => {
+          const cleanId = targetId.replace(/^(ref-|note-)/, '').replace(/_back$/, '');
+          const targetEl = document.getElementById(targetId) || 
+                           document.getElementsByName(targetId)[0] ||
+                           contentRef.current?.querySelector(`[id="${targetId}"]`) || 
+                           contentRef.current?.querySelector(`[name="${targetId}"]`) ||
+                           contentRef.current?.querySelector(`[id="ref-${cleanId}"]`) || 
+                           contentRef.current?.querySelector(`[name="ref-${cleanId}"]`) || 
+                           contentRef.current?.querySelector(`[id="note-${cleanId}"]`) || 
+                           contentRef.current?.querySelector(`a[href="#note-${cleanId}"]`) || 
+                           contentRef.current?.querySelector(`a[href="#${cleanId}"]`) || 
+                           containerRef.current?.querySelector(`[id="${targetId}"]`) || 
+                           containerRef.current?.querySelector(`[name="${targetId}"]`) ||
+                           containerRef.current?.querySelector(`[id="ref-${cleanId}"]`) || 
+                           containerRef.current?.querySelector(`[name="ref-${cleanId}"]`) || 
+                           containerRef.current?.querySelector(`[id="note-${cleanId}"]`) || 
+                           containerRef.current?.querySelector(`a[href="#note-${cleanId}"]`) || 
+                           containerRef.current?.querySelector(`a[href="#${cleanId}"]`);
+
+          if (targetEl) {
+              if (isPagedMode) {
+                  if (contentRef.current) {
+                      const rect = targetEl.getBoundingClientRect();
+                      const contentRect = contentRef.current.getBoundingClientRect();
+                      const targetTop = rect.top - contentRect.top;
+                      const slices = pageSlicesRef.current;
+                      const calculatedPage = slices.findIndex((s, idx) => {
+                          const nextS = slices[idx + 1];
+                          return nextS ? (targetTop >= s.startY - 10 && targetTop < nextS.startY - 10) : true;
+                      });
+                      if (calculatedPage !== -1) {
+                          setPageIndex(calculatedPage);
+                          const ratio = slices.length > 1 ? calculatedPage / (slices.length - 1) : 0;
+                          lastProgressRef.current = ratio;
+                          onProgressUpdate(ratio);
+                      }
+                  }
+              } else {
+                  targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              (window as any).__pendingScrollTarget = null;
+          }
+      };
+
+      const t1 = setTimeout(runScroll, 80);
+      const t2 = setTimeout(runScroll, 250);
+      const t3 = setTimeout(runScroll, 500);
+
+      return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+          clearTimeout(t3);
+      };
+  }, [processedContent, isPagedMode, totalPages, containerWidth]);
+
+  // Prevent browser-native scroll from breaking the CSS column layout in paged mode
+  useEffect(() => {
+    if (!isPagedMode) return;
+    const container = pagedContainerRef.current;
+    if (!container) return;
+
+    const handleScrollReset = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target) {
+        if (target.scrollLeft !== 0) {
+          target.scrollLeft = 0;
+        }
+        if (target.scrollTop !== 0) {
+          target.scrollTop = 0;
+        }
+      }
+    };
+
+    container.addEventListener('scroll', handleScrollReset, { capture: true });
+    return () => {
+      container.removeEventListener('scroll', handleScrollReset, { capture: true });
+    };
+  }, [isPagedMode, propChapterIndex]);
+
+  // Keep scroll position at 0 in paged mode to prevent layout breaks from native focus or auto-scrolls
+  useEffect(() => {
+    if (!isPagedMode) return;
+    
+    const resetScroll = () => {
+      if (containerRef.current) {
+        containerRef.current.scrollLeft = 0;
+        containerRef.current.scrollTop = 0;
+      }
+      if (contentRef.current) {
+        contentRef.current.scrollLeft = 0;
+        contentRef.current.scrollTop = 0;
+        if (contentRef.current.parentElement) {
+          contentRef.current.parentElement.scrollLeft = 0;
+          contentRef.current.parentElement.scrollTop = 0;
+        }
+      }
+    };
+
+    resetScroll();
+    const r1 = requestAnimationFrame(resetScroll);
+    const r2 = setTimeout(resetScroll, 50);
+
+    return () => {
+      cancelAnimationFrame(r1);
+      clearTimeout(r2);
+    };
+  }, [isPagedMode, pageIndex, propChapterIndex]);
+
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressThrottleRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleScroll = () => {
+      if (!containerRef.current) return;
+      const el = containerRef.current;
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      
+      // Position Update
+      lastScrollTopRef.current = scrollTop;
+      const maxScroll = scrollHeight - clientHeight;
+      const ratio = maxScroll > 0 ? scrollTop / maxScroll : 0;
+      lastProgressRef.current = ratio;
+
+      // Throttle App.tsx re-renders to at most once per 120ms during active scrolling
+      if (!progressThrottleRef.current) {
+        progressThrottleRef.current = setTimeout(() => {
+          progressThrottleRef.current = null;
+          onProgressUpdate(lastProgressRef.current);
+        }, 120);
+      }
+
+      // On-demand viewport microtyping on scroll (debounced to avoid layout recalculation during active scroll)
+      if (!isPagedMode) {
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = setTimeout(() => {
+          optimizeTypography();
+        }, 150);
+      }
+  };
+  
+  const handleContentInteract = (e: React.MouseEvent<HTMLDivElement>) => {
+      // 1. Check for Image Click
+      const imgTarget = (e.target as HTMLElement).closest('img');
+      if (imgTarget && imgTarget.src) {
+          e.stopPropagation();
+          onImageClick(imgTarget.src);
+          return;
+      }
+
+      // 2. Check for Link Click
+      const linkTarget = (e.target as HTMLElement).closest('a');
+      if (linkTarget) {
+          const href = linkTarget.getAttribute('href');
+          
+          if (href) {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              if (href.startsWith('#')) {
+                  const targetId = href.substring(1);
+                  (window as any).__pendingScrollTarget = targetId;
+                  const isBackLink = targetId.startsWith('ref-') || targetId.includes('back') || linkTarget.classList.contains('note-back-link');
+                  
+                  const findLocalElement = (idStr: string, root: HTMLElement | null) => {
+                      if (!root || !idStr) return null;
+                      const clean = idStr.replace(/^(ref-|note-)/, '').replace(/_back$/, '');
+                      if (isBackLink) {
+                          return root.querySelector(`[id="${idStr}"]`) || 
+                                 root.querySelector(`[name="${idStr}"]`) ||
+                                 root.querySelector(`[id="ref-${clean}"]`) || 
+                                 root.querySelector(`[name="ref-${clean}"]`) ||
+                                 root.querySelector(`a[href="#note-${clean}"]`) ||
+                                 root.querySelector(`a[href="#${clean}"]`);
+                      }
+                      return root.querySelector(`[id="${idStr}"]`) || 
+                             root.querySelector(`[name="${idStr}"]`) ||
+                             (!idStr.startsWith('note-') ? root.querySelector(`[id="note-${idStr}"]`) : null) ||
+                             (idStr.startsWith('note-') ? root.querySelector(`[id="${idStr.replace(/^note-/, '')}"]`) : null);
+                  };
+
+                  if (isPagedMode) {
+                      const targetEl = findLocalElement(targetId, contentRef.current);
+                      if (targetEl && contentRef.current) {
+                          const rect = targetEl.getBoundingClientRect();
+                          const contentRect = contentRef.current.getBoundingClientRect();
+                          const targetTop = rect.top - contentRect.top;
+                          const slices = pageSlicesRef.current;
+                          const calculatedPage = slices.findIndex((s, idx) => {
+                              const nextS = slices[idx + 1];
+                              return nextS ? (targetTop >= s.startY - 10 && targetTop < nextS.startY - 10) : true;
+                          });
+                          if (calculatedPage !== -1) {
+                              setPageIndex(calculatedPage);
+                              const ratio = slices.length > 1 ? calculatedPage / (slices.length - 1) : 0;
+                              lastProgressRef.current = ratio;
+                              onProgressUpdate(ratio);
+                          }
+                      } else {
+                          if (onExternalLinkClick) onExternalLinkClick(href);
+                      }
+                  } else {
+                      const targetEl = findLocalElement(targetId, containerRef.current);
+                      if (targetEl) {
+                          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      } else {
+                          if (onExternalLinkClick) onExternalLinkClick(href);
+                      }
+                  }
+              } else {
+                  if (onExternalLinkClick) onExternalLinkClick(href);
+              }
+              return;
+          }
+      }
+  };
+
+  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+      // If we clicked a button, link, or image, do NOT navigate
+      if ((e.target as HTMLElement).closest('button, a, img')) return;
+      
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) return;
+
+      const width = window.innerWidth;
+      const x = e.clientX;
+
+      if (highlightText && onHighlightClear) {
+          onHighlightClear();
+          return;
+      }
+
+      if (isRsvpMode) {
+          onToggleUI();
+          return;
+      }
+
+      if (isPagedMode) {
+          if (x < width * 0.25) {
+              handlePageTurn('prev');
+          } else if (x > width * 0.75) {
+              handlePageTurn('next');
+          } else {
+              onToggleUI();
+          }
+          return;
+      }
+
+      if (x < width * 0.25) {
+          navigate('prev');
+      } else if (x > width * 0.75) {
+          navigate('next');
+      } else {
+          onToggleUI();
+      }
+  };
+
+  const navigate = (direction: 'prev' | 'next') => {
+      if (!containerRef.current) return;
+      const el = containerRef.current;
+      const scrollAmount = el.clientHeight * 0.9;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      
+      if (direction === 'next') {
+          // If we are at the very bottom (with a small buffer)
+          if (el.scrollTop >= maxScroll - 5) {
+              if (propChapterIndex < book.chapters.length - 1) {
+                  onChapterChange(propChapterIndex + 1, 'start');
+              }
+          } else {
+              el.scrollTo({ top: el.scrollTop + scrollAmount, behavior: 'smooth' });
+          }
+      } else {
+          // If we are at the very top
+          if (el.scrollTop <= 5) {
+              if (propChapterIndex > 0) {
+                  onChapterChange(propChapterIndex - 1, 'end');
+              }
+          } else {
+              el.scrollTo({ top: el.scrollTop - scrollAmount, behavior: 'smooth' });
+          }
+      }
+  };
+
+
+  const activeContentRef = isPagedMode ? pagedContentRef : containerRef;
+
+  const {
+      rsvpWords,
+      rsvpIndex,
+      setRsvpIndex,
+      isRsvpPlaying,
+      setIsRsvpPlaying,
+      rsvpTranslateX,
+      rsvpWrapperRef
+  } = useRsvp({
+      isRsvpMode,
+      processedContent,
+      containerRef: activeContentRef,
+      rsvpStartBlockIndexRef,
+      rsvpWpm,
+      isPagedMode,
+      pagedContainerRef
+  });
+
+  const lastRsvpScrollTimeRef = useRef<number>(0);
+  const lastRsvpIndexRef = useRef<number>(0);
+
+  // Sync scroll / page with RSVP word
+  useEffect(() => {
+      const activeRef = isPagedMode ? pagedContainerRef : containerRef;
+      if (!isRsvpMode || rsvpWords.length === 0 || !activeRef.current) return;
+      const currentWord = rsvpWords[rsvpIndex];
+      if (!currentWord || !currentWord.node.parentElement) return;
+
+      const isManualJump = Math.abs(rsvpIndex - lastRsvpIndexRef.current) > 2;
+      lastRsvpIndexRef.current = rsvpIndex;
+
+      // Extract accurate bounding box of the word using Range
+      let wordTop = 0;
+      let wordBottom = 0;
+      let wordLeft = 0;
+      let wordRight = 0;
+      let hasWordRect = false;
+
+      try {
+          const range = document.createRange();
+          range.selectNodeContents(currentWord.node);
+          const rect = range.getBoundingClientRect();
+          if (rect.height > 0) {
+              wordTop = rect.top;
+              wordBottom = rect.bottom;
+              wordLeft = rect.left;
+              wordRight = rect.right;
+              hasWordRect = true;
+          }
+      } catch (e) {}
+
+      if (!hasWordRect && currentWord.node.parentElement) {
+          const pRect = currentWord.node.parentElement.getBoundingClientRect();
+          wordTop = pRect.top;
+          wordBottom = pRect.bottom;
+          wordLeft = pRect.left;
+          wordRight = pRect.right;
+      }
+
+      if (!isPagedMode) {
+          const containerRect = activeRef.current.getBoundingClientRect();
+          const relativeTop = wordTop - containerRect.top;
+          const viewportH = containerRect.height;
+
+          // If manual jump (slider / nav buttons), smoothly center word in comfortable reading zone
+          if (isManualJump) {
+              const targetY = wordTop - containerRect.top + activeRef.current.scrollTop - (viewportH * 0.35);
+              activeRef.current.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+              lastRsvpScrollTimeRef.current = Date.now();
+              return;
+          }
+
+          // Throttle smooth scrolling during RSVP playback to prevent animation stacking / bouncing
+          if (Date.now() - lastRsvpScrollTimeRef.current < 900) {
+              return;
+          }
+
+          // Wide comfortable deadband: only scroll when word approaches viewport boundaries
+          if (relativeTop > viewportH * 0.72) {
+              // Word is near bottom: gently scroll so word is placed at 35% viewport height
+              const targetY = wordTop - containerRect.top + activeRef.current.scrollTop - (viewportH * 0.35);
+              activeRef.current.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+              lastRsvpScrollTimeRef.current = Date.now();
+          } else if (relativeTop < viewportH * 0.18) {
+              // Word is near top: gently scroll so word is placed at 40% viewport height
+              const targetY = wordTop - containerRect.top + activeRef.current.scrollTop - (viewportH * 0.40);
+              activeRef.current.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+              lastRsvpScrollTimeRef.current = Date.now();
+          }
+      } else if (pagedContainerRef.current) {
+          const containerRect = pagedContainerRef.current.getBoundingClientRect();
+          if (wordLeft >= containerRect.right - 15) {
+              if (Date.now() - lastRsvpScrollTimeRef.current > 500) {
+                  lastRsvpScrollTimeRef.current = Date.now();
+                  setPageIndex(prev => Math.min(totalPages - 1, prev + 1));
+              }
+          } else if (wordRight <= containerRect.left + 15) {
+              if (Date.now() - lastRsvpScrollTimeRef.current > 500) {
+                  lastRsvpScrollTimeRef.current = Date.now();
+                  setPageIndex(prev => Math.max(0, prev - 1));
+              }
+          }
+      }
+  }, [rsvpIndex, isRsvpMode, rsvpWords, isPagedMode, totalPages]);
+
+
+  // Styles based on theme
+  const containerClasses = theme === 'light' 
+     ? (appStyle === 'Bimbo' ? 'bg-[#faf0f4] text-[#4a1525]' : appStyle === 'Surf' ? 'bg-[#f4f7f9] text-[#1e3a4c]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#f5f1e7] text-[#2b251e]' : appStyle === 'Dragon' ? 'bg-[#fdf9f1] text-[#3d2a22]' : appStyle === 'Marcel' ? 'bg-[#F3EFFB] text-[#2F2440]' : 'bg-[#fbfaf0] text-[#282625]')
+     : (appStyle === 'Bimbo' ? 'bg-[#1c0f13] text-[#e8cbd5]' : appStyle === 'Surf' ? 'bg-[#111e25] text-[#b5cbd6]' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'bg-[#0d1a33] text-[#d6d0c0]' : appStyle === 'Dragon' ? 'bg-[#1c1412] text-[#d6c5b4]' : appStyle === 'Marcel' ? 'bg-[#1a1918] text-[#c7c5c1]' : 'bg-[#1a1918] text-[#c7c5c1]');
+
+  const nextBtnClasses = theme === 'light'
+     ? (appStyle === 'Bimbo' 
+        ? 'border-[#f2d5e0] bg-[#faf0f4] text-[#881337] hover:bg-[#f2e1e8] hover:border-[#f2d5e0]' 
+        : appStyle === 'Surf'
+        ? 'border-[#bae6fd] bg-[#f4f7f9] text-[#0369a1] hover:bg-[#e0f2fe] hover:border-[#7dd3fc]'
+        : (appStyle === 'Final' || appStyle === 'Final Fantasy') 
+        ? 'border-[#e0d6c1] bg-[#f5f1e7] text-[#594d3f] hover:bg-[#eae3d1] hover:border-[#cca972]'
+        : appStyle === 'Dragon'
+        ? 'border-[#e8dcc8] bg-[#fdf9f1] text-[#7a4c3a] hover:bg-[#f2eadd] hover:border-[#c28469]'
+        : appStyle === 'Marcel'
+        ? 'border-[#C4B5E6] bg-[#F3EFFB] text-[#544372] hover:bg-[#E8E0F5] hover:border-[#AC97D7]'
+        : 'border-[#e0ded5] bg-[#fbfaf0] text-[#555] hover:text-[#000] hover:border-[#ccc] hover:bg-[#f0eee4]')
+     : (appStyle === 'Bimbo'
+        ? 'border-[#4a1525] bg-[#1c0f13] text-[#e8cbd5] hover:bg-[#2b161c] hover:border-[#6e2137]'
+        : appStyle === 'Surf'
+        ? 'border-[#1e3a4c] bg-[#111e25] text-[#b5cbd6] hover:bg-[#182933] hover:border-[#2a526b]'
+        : (appStyle === 'Final' || appStyle === 'Final Fantasy') 
+        ? 'border-[#1f3358] bg-[#0d1a33] text-[#a6c0ea] hover:bg-[#13244a] hover:border-[#2a4a7a]'
+        : appStyle === 'Dragon'
+        ? 'border-[#3d2a22] bg-[#1c1412] text-[#d6c5b4] hover:bg-[#2e1d18] hover:border-[#5c3c2e]'
+        : appStyle === 'Marcel'
+        ? 'border-[#363330] bg-[#1a1918] text-[#8C937A] hover:text-[#c7c5c1] hover:bg-[#2a2927]'
+        : 'border-[#363330] bg-[#1a1918] text-[#9a9893] hover:text-[#c7c5c1] hover:bg-[#2a2927]');
+  
+  const hrClasses = theme === 'light'
+     ? (appStyle === 'Bimbo' 
+        ? 'border-[#eac7d4]' 
+        : (appStyle === 'Surf' ? 'border-[#cce1ed]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'border-[#e0d6c1]' : (appStyle === 'Dragon' ? 'border-[#e8dcc8]' : appStyle === 'Marcel' ? 'border-[#C4B5E6]' : 'border-[#e0ded5]'))))
+     : (appStyle === 'Bimbo' 
+        ? 'border-[#4a1525]' 
+        : (appStyle === 'Surf' ? 'border-[#1e3a4c]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'border-[#1f3358]' : (appStyle === 'Dragon' ? 'border-[#3d2a22]' : appStyle === 'Marcel' ? 'border-[#363330]' : 'border-[#363330]'))));
+
+  return (
+    <div className={`flex-1 relative w-full h-full overflow-hidden transition-colors duration-300 bimbo-reader-canvas ${containerClasses}`}>
+        {(isLoading || isCalculating) && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-30 pointer-events-none transition-opacity duration-150">
+                <div className={`w-11 h-11 border-3 border-t-transparent rounded-full animate-spin shadow-lg ${
+                    appStyle === 'Bimbo' ? 'border-pink-300 border-t-pink-600' : 
+                    appStyle === 'Surf' ? 'border-sky-300 border-t-sky-600' : 
+                    appStyle === 'Dragon' ? 'border-orange-300 border-t-orange-600' :
+                    appStyle === 'Marcel' ? 'border-[#C4B5E6] border-t-[#544372]' :
+                    (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'border-[#e0d6c1] border-t-[#cca972]' :
+                    'border-[#fffff0]/30 border-t-[#fffff0]'
+                }`}></div>
+            </div>
+        )}
+
+        {isRsvpMode && rsvpWords.length > 0 && (() => {
+            const rsvpFontClass = 'font-literata';
+
+            const rsvpBorderClass = 
+                appStyle === 'Bimbo' ? 'border-[#eac7d4] dark:border-[#4a1525]' :
+                appStyle === 'Surf' ? 'border-[#cce1ed] dark:border-[#1e3a4c]' :
+                (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'border-[#e0d6c1] dark:border-[#1f3358]' :
+                appStyle === 'Dragon' ? 'border-[#e8dcc8] dark:border-[#3d2a22]' :
+                appStyle === 'Marcel' ? 'border-[#C4B5E6] dark:border-[#363330]' :
+                'border-black/30 dark:border-white/30';
+
+            const isBimbo = appStyle === 'Bimbo';
+            const isSurf = appStyle === 'Surf';
+            const isMarcel = appStyle === 'Marcel';
+            const isDragon = appStyle === 'Dragon';
+            const isFinal = appStyle === 'Final' || appStyle === 'Final Fantasy';
+            
+            const accentColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFinal ? '#cca972' : (theme === 'light' ? '#2c2a28' : '#ffffff');
+            const iconColor = isMarcel ? '#F3EFFB' : isBimbo ? '#FFFFFF' : isSurf ? '#FFFFFF' : (theme === 'light' ? '#ffffff' : '#1c1c1c');
+            const controlColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0284c7' : isDragon ? '#ea580c' : isFinal ? '#cca972' : (theme === 'light' ? '#1c1c1c' : '#ffffff');
+
+            const windowStart = rsvpIndex;
+            const windowEnd = Math.min(rsvpWords.length, rsvpIndex + 31);
+
+            return (
+                <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none backdrop-blur-md`}>
+                    <div className={`pointer-events-auto w-full max-w-md mx-auto p-6 rounded-2xl shadow-2xl flex flex-col gap-6 -mt-32 ${theme === 'light' ? 'bg-white/90' : 'bg-[#23211f]/90'}`}>
+                        {/* Separator lines and RSVP line */}
+                        <div 
+                            ref={rsvpWrapperRef}
+                            className="relative w-full py-1.5 my-0.5 flex flex-col items-center justify-center overflow-hidden"
+                        >
+                            {/* Gradient masks to hide "flying" words */}
+                            <div className="absolute inset-0 pointer-events-none z-10">
+                                <div className={`absolute inset-y-0 left-0 w-24 bg-gradient-to-r ${theme === 'light' ? 'from-white via-white/80 to-transparent' : 'from-[#23211f] via-[#23211f]/80 to-transparent'}`} />
+                                <div className={`absolute inset-y-0 right-0 w-24 bg-gradient-to-l ${theme === 'light' ? 'from-white via-white/80 to-transparent' : 'from-[#23211f] via-[#23211f]/80 to-transparent'}`} />
+                            </div>
+
+                            {/* Top divider line */}
+                            <div className={`absolute top-0 left-0 right-0 h-[1.5px] ${theme === 'light' ? 'bg-neutral-900' : 'bg-white/30'}`} />
+                            
+                            {/* Top tick pointing down */}
+                            <div 
+                                className={`absolute top-0 w-[6px] h-[8px] -translate-x-1/2 ${theme === 'light' ? 'bg-black' : 'bg-white/50'}`}
+                                style={{ 
+                                    left: '35%',
+                                    clipPath: 'polygon(0 0, 100% 0, 50% 100%)'
+                                }}
+                            />
+
+                            {/* Bottom divider line */}
+                            <div className={`absolute bottom-0 left-0 right-0 h-[1.5px] ${theme === 'light' ? 'bg-neutral-900' : 'bg-white/30'}`} />
+
+                            {/* Bottom tick pointing up */}
+                            <div 
+                                className={`absolute bottom-0 w-[6px] h-[8px] -translate-x-1/2 ${theme === 'light' ? 'bg-black' : 'bg-white/50'}`}
+                                style={{ 
+                                    left: '35%',
+                                    clipPath: 'polygon(50% 0, 0 100%, 100% 100%)'
+                                }}
+                            />
+
+                            {/* RSVP Highlight Shadow */}
+                            <div 
+                                className="absolute top-0 bottom-0 pointer-events-none z-0"
+                                style={{ 
+                                    left: '35%', 
+                                    width: '1.2ch', 
+                                    backgroundColor: 'transparent',
+                                    transform: 'translateX(-50%)',
+                                    boxShadow: 'none'
+                                }} 
+                            />
+                            
+                            {/* The text row with reduced font size (text-base sm:text-lg) */}
+                            <div className="w-full flex items-center h-8 text-base sm:text-lg font-normal tracking-tight relative overflow-hidden select-none">
+                                <div 
+                                    className="absolute left-0 top-0 bottom-0 h-full flex items-center whitespace-nowrap transition-transform duration-75 ease-in-out"
+                                    style={{ 
+                                        transform: `translateX(${rsvpTranslateX}px)`,
+                                        willChange: 'transform'
+                                    }}
+                                >
+                                    {rsvpWords.slice(windowStart, windowEnd).map((item, index) => {
+                                        const originalIndex = windowStart + index;
+                                        const isActive = originalIndex === rsvpIndex;
+                                        
+                                        const word = item.word;
+                                        let itemFootnote = item.footnote || "";
+
+                                        // Also check if word itself has trailing footnote like [1], (1), *, etc.
+                                        let cleanWordStr = word;
+                                        const inlineFnMatch = cleanWordStr.match(/^(.*?)(\[\d+\]|\(\d+\)|\*+|[¹²³⁴⁵⁶⁷⁸⁹⁰]+)$/u);
+                                        if (inlineFnMatch && inlineFnMatch[1].length > 0) {
+                                            cleanWordStr = inlineFnMatch[1];
+                                            itemFootnote = (itemFootnote ? itemFootnote + ' ' : '') + inlineFnMatch[2];
+                                        }
+
+                                        const firstAlphaIdx = cleanWordStr.search(/[\p{L}\p{N}]/u);
+                                        let leading = "";
+                                        let coreWord = cleanWordStr;
+                                        let trailing = "";
+
+                                        if (firstAlphaIdx !== -1) {
+                                            let lastAlphaIdx = -1;
+                                            for (let i = cleanWordStr.length - 1; i >= firstAlphaIdx; i--) {
+                                                if (/[\p{L}\p{N}]/u.test(cleanWordStr[i])) {
+                                                    lastAlphaIdx = i;
+                                                    break;
+                                                }
+                                            }
+                                            leading = cleanWordStr.substring(0, firstAlphaIdx);
+                                            coreWord = cleanWordStr.substring(firstAlphaIdx, lastAlphaIdx + 1);
+                                            trailing = cleanWordStr.substring(lastAlphaIdx + 1);
+                                        }
+
+                                        const L = coreWord.length;
+                                        let orpIndex = 0;
+                                        if (L <= 1) orpIndex = 0;
+                                        else if (L <= 5) orpIndex = 1;
+                                        else if (L <= 9) orpIndex = 2;
+                                        else if (L <= 13) orpIndex = 3;
+                                        else orpIndex = 4;
+
+                                        const left = coreWord.substring(0, orpIndex);
+                                        const mid = coreWord.charAt(orpIndex);
+                                        const right = coreWord.substring(orpIndex + 1);
+                                        
+                                        let orpColorClass = 'font-normal';
+                                        if (isActive) {
+                                            orpColorClass = theme === 'light' ? 'text-[#480607] font-bold' : 'text-red-500 font-bold';
+                                        }
+
+                                        const textStyleClass = isActive 
+                                            ? (theme === 'light' ? 'text-neutral-950 opacity-100 font-normal scale-100' : 'text-white opacity-100 font-normal scale-100')
+                                            : (theme === 'light' ? 'text-neutral-400 opacity-25 font-normal' : 'text-neutral-500 opacity-25 font-normal');
+
+                                        const punctColorClass = isActive 
+                                            ? (theme === 'light' ? 'text-neutral-400 font-normal' : 'text-neutral-500 font-normal')
+                                            : 'opacity-40';
+
+                                        const renderPart = (text: string) => {
+                                            if (!text) return null;
+                                            if (!/[^\p{L}\p{N}]/u.test(text)) {
+                                                return <span>{text}</span>;
+                                            }
+                                            const segments = text.split(/([^\p{L}\p{N}]+)/u);
+                                            return (
+                                                <span>
+                                                    {segments.map((seg, i) => {
+                                                        if (!seg) return null;
+                                                        const isPunct = /^[^\p{L}\p{N}]+$/u.test(seg);
+                                                        return isPunct ? (
+                                                            <span key={i} className={punctColorClass}>{seg}</span>
+                                                        ) : (
+                                                            <span key={i}>{seg}</span>
+                                                        );
+                                                    })}
+                                                </span>
+                                            );
+                                        };
+
+                                        return (
+                                            <React.Fragment key={originalIndex}>
+                                                {item.isParagraphStart && originalIndex > rsvpIndex && (
+                                                    <div className="w-64 sm:w-80 md:w-96 flex-shrink-0 opacity-100 transition-none" />
+                                                )}
+                                                <span 
+                                                    data-rsvp-word-index={originalIndex}
+                                                    className={`inline-block mx-1.5 whitespace-nowrap transition-none ${textStyleClass} ${rsvpFontClass}`}
+                                                >
+                                                    {leading && <span className={punctColorClass}>{leading}</span>}
+                                                    {renderPart(left)}
+                                                    <span className={`rsvp-orp ${orpColorClass}`}>{mid}</span>
+                                                    {renderPart(right)}
+                                                    {trailing && <span className={punctColorClass}>{trailing}</span>}
+                                                    {itemFootnote && (
+                                                        <sup className={`text-[0.68em] align-super ml-0.5 font-normal ${punctColorClass} ${item.footnoteIsItalic ? 'italic' : ''}`}>
+                                                            {itemFootnote}
+                                                        </sup>
+                                                    )}
+                                                </span>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div className="flex items-center justify-center gap-6 md:gap-8">
+                            <button 
+                                onClick={() => {
+                                    let i = rsvpIndex - 1;
+                                    while (i > 0 && !rsvpWords[i].isParagraphStart) i--;
+                                    setRsvpIndex(Math.max(0, i));
+                                }}
+                                className="transition-colors active:scale-95 transform p-2" 
+                                style={{ color: controlColor }} 
+                                
+                            >
+                                <ChevronLeft className="w-8 h-8" />
+                            </button>
+
+                            <button 
+                                onClick={() => {
+                                    const isAtEnd = rsvpIndex >= rsvpWords.length - 1;
+                                    if (isAtEnd && propChapterIndex < book.chapters.length - 1) {
+                                        onChapterChange(propChapterIndex + 1, 'start');
+                                    } else if (!isAtEnd) {
+                                        setIsRsvpPlaying(!isRsvpPlaying);
+                                    }
+                                }}
+                                className="w-16 h-16 md:w-20 md:h-20 rounded-full hover:scale-105 active:scale-95 flex items-center justify-center shadow-lg transition-all duration-300"
+                                style={{ backgroundColor: accentColor, color: iconColor }}
+                            >
+                                {isRsvpPlaying ? (
+                                    <Pause className="w-6 h-6 md:w-8 md:h-8 fill-current" />
+                                ) : (
+                                    (rsvpIndex >= rsvpWords.length - 1 && propChapterIndex < book.chapters.length - 1) ? (
+                                        <SkipForward className="w-8 h-8 md:w-10 md:h-10 fill-current" />
+                                    ) : (
+                                        <Play className="w-6 h-6 md:w-8 md:h-8 fill-current ml-1" />
+                                    )
+                                )}
+                            </button>
+
+                            <button 
+                                onClick={() => {
+                                    let i = rsvpIndex + 1;
+                                    while (i < rsvpWords.length && !rsvpWords[i].isParagraphStart) i++;
+                                    setRsvpIndex(Math.min(rsvpWords.length - 1, i));
+                                }}
+                                className="transition-colors active:scale-95 transform p-2" 
+                                style={{ color: controlColor }} 
+                                
+                            >
+                                <ChevronRight className="w-8 h-8" />
+                            </button>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <div className="flex justify-center gap-4 items-center px-1">
+                                <button 
+                                    onClick={() => onRsvpWpmChange?.(Math.max(100, (rsvpWpm || 300) - 25))} 
+                                    className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded active:scale-95 transition-transform"
+                                >
+                                    <Minus size={16}/>
+                                </button>
+                                <span className="text-sm font-mono font-bold">{rsvpWpm} WPM</span>
+                                <button 
+                                    onClick={() => onRsvpWpmChange?.(Math.min(1000, (rsvpWpm || 300) + 25))} 
+                                    className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded active:scale-95 transition-transform"
+                                >
+                                    <Plus size={16}/>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="w-full flex items-center relative h-6">
+                            {/* Paragraph markers */}
+                            <div className="absolute inset-0 flex items-center pointer-events-none px-2">
+                                <div className="relative w-full h-1">
+                                    {rsvpWords.map((word, i) => {
+                                        if (word.isParagraphStart && i > 0) {
+                                            const left = (i / (rsvpWords.length - 1)) * 100;
+                                            return (
+                                                <div 
+                                                    key={i}
+                                                    className={`absolute top-1/2 -translate-y-1/2 w-[1px] h-3 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}
+                                                    style={{ left: `${left}%` }}
+                                                />
+                                            );
+                                        }
+                                        return null;
+                                    })}
+                                </div>
+                            </div>
+
+                            <input
+                                type="range"
+                                min="0"
+                                max={Math.max(0, rsvpWords.length - 1)}
+                                value={rsvpIndex}
+                                onChange={(e) => {
+                                    setIsRsvpPlaying(false);
+                                    setRsvpIndex(Number(e.target.value));
+                                }}
+                                className="w-full accent-current opacity-70 hover:opacity-100 appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-current transition-all z-10"
+                                style={{
+                                    background: `linear-gradient(to right, currentColor ${rsvpWords.length > 1 ? (rsvpIndex / (rsvpWords.length - 1)) * 100 : 0}%, rgba(128,128,128,0.2) ${rsvpWords.length > 1 ? (rsvpIndex / (rsvpWords.length - 1)) * 100 : 0}%)`,
+                                    height: '4px',
+                                    borderRadius: '2px'
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        })()}
+
+        {/* Global Reader Styles Injection */}
+        <style>{`
+          @keyframes pulse-highlight {
+            0%, 100% { box-shadow: 0 0 2px rgba(255,255,255,0.5); }
+            50% { box-shadow: 0 0 8px rgba(255,255,255,0.8); background-color: rgba(255,255,255,0.35); }
+          }
+          .animate-pulse {
+            animation: pulse-highlight 2s infinite;
+          }
+          
+          /* Typography & Layout Fixes */
+          .reader-content,
+          .reader-content p,
+          .reader-content div,
+          .reader-content span,
+          .reader-content h1,
+          .reader-content h2,
+          .reader-content h3,
+          .reader-content h4,
+          .reader-content h5,
+          .reader-content h6,
+          .reader-content a,
+          .reader-content li,
+          .reader-content td,
+          .reader-content blockquote { 
+             font-family: ${readerFontCSS} !important;
+          }
+          ::highlight(tts-word) {
+             background-color: ${appStyle === 'Bimbo' ? 'rgba(244,114,182,0.38)' : appStyle === 'Surf' ? 'rgba(56,189,248,0.32)' : appStyle === 'Marcel' ? 'rgba(172,151,215,0.45)' : appStyle === 'Dragon' ? 'rgba(234,88,12,0.38)' : (appStyle === 'Final' || appStyle === 'Final Fantasy') ? 'rgba(223,200,148,0.38)' : theme === 'light' ? 'rgba(217,119,6,0.25)' : 'rgba(251,191,36,0.28)'};
+             color: inherit;
+          }
+          .reader-content {
+             text-align: justify !important;
+             text-justify: auto !important;
+             word-spacing: 0 !important;
+             letter-spacing: 0 !important;
+             font-kerning: normal !important;
+             font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "locl" 1 !important;
+             text-rendering: optimizeLegibility !important;
+             hyphens: auto !important;
+             -webkit-hyphens: auto !important;
+             -ms-hyphens: auto !important;
+
+             hanging-punctuation: first last force-end !important;
+             -webkit-hanging-punctuation: first last force-end !important;
+             text-wrap: wrap !important;
+          }
+
+          .reader-content p {
+             word-spacing: 0 !important;
+             letter-spacing: 0 !important;
+             font-kerning: normal !important;
+             font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "locl" 1 !important;
+             font-variant-numeric: normal !important;
+          }
+
+          .punct-tight {
+             display: inline !important;
+             white-space: nowrap !important;
+             font-feature-settings: "kern" 1, normal !important;
+             font-kerning: normal !important;
+             text-rendering: optimizeLegibility !important;
+             font-variant-numeric: normal !important;
+          }
+
+          .punct-tight-dots {
+             letter-spacing: -0.09em !important;
+             margin-right: 0.12em;
+          }
+
+          .punct-tight-combo {
+             display: inline !important;
+             white-space: nowrap !important;
+             letter-spacing: normal !important;
+             font-kerning: normal !important;
+             /* the small dots leave little ink at the end: without this the following word space looks lost */
+             margin-right: 0.12em;
+          }
+
+          .punct-tight-combo .punct-mark {
+             display: inline !important;
+          }
+
+          .punct-combo-exclamation .punct-mark {
+             letter-spacing: normal !important;
+          }
+
+          .punct-combo-exclamation .punct-dots {
+             margin-left: -0.05em !important;
+             letter-spacing: -0.09em !important;
+             /* the last dot's letter spacing would eat into the following word space */
+             margin-right: 0.09em !important;
+             font-size: ${dotScale.excl}em;
+             display: inline !important;
+          }
+
+          .punct-combo-question .punct-mark {
+             letter-spacing: -0.05em !important;
+          }
+
+          .punct-combo-question .punct-dots {
+             margin-left: -0.22em !important;
+             letter-spacing: -0.09em !important;
+             margin-right: 0.09em !important;
+             font-size: ${dotScale.quest}em;
+             display: inline !important;
+          }
+
+          .reader-dash {
+             display: inline !important;
+          }
+
+          .reader-dash-glyph {
+             display: inline !important;
+             font-size: 0.82em !important;
+             line-height: inherit !important;
+             vertical-align: 0.04em !important;
+             letter-spacing: normal !important;
+          }
+
+          .dash-fixed {
+             white-space: nowrap !important;
+          }
+
+          .dash-word-lead {
+             white-space: nowrap !important;
+          }
+
+          .dash-space {
+             display: inline-block !important;
+             width: 0.28em !important;
+             max-width: 0.28em !important;
+             min-width: 0.28em !important;
+             overflow: hidden !important;
+             text-align: center !important;
+             vertical-align: baseline !important;
+          }
+
+          .dash-space-intra {
+             display: inline-block !important;
+             width: 0.28em !important;
+             max-width: 0.28em !important;
+             min-width: 0.28em !important;
+             overflow: hidden !important;
+             text-align: center !important;
+             vertical-align: baseline !important;
+          }
+
+          .reader-content h1, 
+          .reader-content h2, 
+          .reader-content h3, 
+          .reader-content h4, 
+          .reader-content h5, 
+          .reader-content h6,
+          .reader-content .title,
+          .reader-content strong.title,
+          .reader-content .subtitle {
+             text-align: center !important;
+             letter-spacing: normal !important;
+             word-spacing: normal !important;
+          }
+
+          .reader-content em, .reader-content i,
+          .reader-content em a, .reader-content i a,
+          .reader-content em sup, .reader-content i sup,
+          .reader-content .footnote-italic,
+          .reader-content a.footnote-italic,
+          .reader-content sup.footnote-italic,
+          .reader-content em.footnote-italic,
+          .reader-content span.footnote-italic { 
+             font-style: italic !important; 
+             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#db2777' : '#fb7185'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#b45309' : '#93c5fd'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
+          }
+          .reader-content .it-corr {
+             margin-right: 0.08em;
+          }
+          .reader-content strong, .reader-content b { 
+             font-weight: bold !important; 
+             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#f472b6'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#1e3a8a' : '#fcd34d'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
+          }
+
+          /* Reset for standard blocks to prevent styling leaks from previous tags */
+          .reader-content p, .reader-content div, .reader-content td, .reader-content table {
+             font-style: normal;
+          }
+
+          /* Empty Line Support - ROBUST */
+          .reader-content .empty-line {
+              display: block !important;
+              min-height: 0.8em !important;
+              width: 100% !important;
+              margin: 0.25em 0 !important;
+              content: " ";
+              clear: both;
+          }
+
+          /* PARAGRAPH INDENTATION - ALWAYS ON (Default Behavior for body text) */
+          .reader-content p {
+             text-indent: 1.5em;
+          }
+
+          .reader-content p.no-indent,
+          .reader-content table,
+          .reader-content table *,
+          .reader-content table p,
+          .reader-content table td p,
+          .reader-content table th p,
+          .reader-content table tr p,
+          .reader-content table div,
+          .reader-content table td,
+          .reader-content table th,
+          .reader-content table span,
+          .reader-content td,
+          .reader-content th,
+          .reader-content td p,
+          .reader-content th p,
+          .reader-content ul li,
+          .reader-content ul li p,
+          .reader-content ul p {
+             text-indent: 0 !important;
+          }
+
+          /* STYLED MODE: Indent removal logic */
+          ${isStyledMode ? `
+            /* Remove indent for first paragraph of chapter (unless no-dropcap) */
+            .reader-content > p:first-of-type:not(.no-dropcap),
+            /* Remove indent for paragraph following ANY header */
+            .reader-content h1 + p:not(.no-dropcap),
+            .reader-content h2 + p:not(.no-dropcap),
+            .reader-content h3 + p:not(.no-dropcap),
+            .reader-content h4 + p:not(.no-dropcap),
+            .reader-content h5 + p:not(.no-dropcap),
+            .reader-content h6 + p:not(.no-dropcap),
+            .reader-content .title + p:not(.no-dropcap),
+            .reader-content .subtitle + p:not(.no-dropcap) {
+                text-indent: 0 !important;
+            }
+
+            /* Paragraphs explicitly marked no-indent MUST have no text-indent */
+            .reader-content p.no-indent {
+                text-indent: 0 !important;
+            }
+
+            /* Drop Cap - ONLY for the very first paragraph of the chapter */
+            .reader-content > p:first-of-type:not(.no-dropcap)::first-letter {
+                float: left;
+                font-size: 3.25em;
+                line-height: 0.8;
+                margin-right: 0.1em;
+                margin-top: 0.05em;
+                margin-bottom: -0.1em;
+                font-weight: bold;
+                font-family: ${readerFontCSS} !important;
+                color: inherit;
+                ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
+                ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#2563eb' : '#60a5fa'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 8px rgba(96,165,250,0.4)'} !important;` : ''}
+                ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
+            }
+          ` : ''}
+
+          /* Headers - Ensure no indent and proper spacing */
+          .reader-content h1, .reader-content h2, .reader-content h3, 
+          .reader-content h4, .reader-content h5, .reader-content h6,
+          .reader-content .injected-title,
+          .reader-content .title,
+          .reader-content .subtitle {
+             text-indent: 0 !important;
+             padding-left: 0 !important;
+             margin-left: 0 !important;
+             text-align: center !important;
+             font-weight: bold;
+             line-height: 1.3;
+             margin-top: 1.5em;
+             margin-bottom: 0.8em;
+          }
+
+          .reader-content > :first-child {
+             margin-top: 0 !important;
+          }
+
+          .reader-content > :first-child:is(h1, h2, h3, h4, h5, h6, .title, .injected-title) {
+             margin-top: 0.1em !important;
+          }
+
+          /* Main Chapter Titles (H1, H2) - Add Separator */
+          .reader-content h1, .reader-content h2, .reader-content .title {
+             font-size: 1.8em !important;
+             border-bottom: 1px solid rgba(128,128,128, 0.3);
+             padding-bottom: 0.6em;
+             margin-bottom: 1.2em;
+             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#FFF0F5'} !important; border-bottom-color: ${theme === 'light' ? '#FBCFE8' : '#be123c'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#92400e' : '#f0deba'} !important; border-bottom-color: ${theme === 'light' ? '#d97706' : '#dfc894'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#fcd34d'} !important; border-bottom-color: ${theme === 'light' ? '#450a0a' : '#7f1d1d'} !important;` : ''}
+          }
+          
+          /* Subtitles (H3+) - No Separator */
+          .reader-content h3, .reader-content h4, .reader-content h5, 
+          .reader-content h6, .reader-content .subtitle { 
+             font-size: 1.4em !important; 
+             border-bottom: none !important;
+             padding-bottom: 0 !important;
+             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#1e40af' : '#a6c0ea'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#7f1d1d' : '#b45309'} !important;` : ''}
+          }
+
+          /* Ensure elements inside headers also don't indent and allow multi-line titles */
+          .reader-content h1 p, .reader-content h2 p, .reader-content h3 p, .reader-content h4 p,
+          .reader-content .title p, .reader-content .subtitle p, .reader-content .injected-title p,
+          .reader-content title p {
+             text-indent: 0 !important;
+             display: block !important;
+             text-align: center !important;
+             margin-top: 0.2em !important;
+             margin-bottom: 0.2em !important;
+             font-weight: bold !important;
+          }
+
+          .reader-content .title p:first-child,
+          .reader-content h1 p:first-child,
+          .reader-content h2 p:first-child {
+             margin-top: 0 !important;
+          }
+
+          .reader-content .title p:last-child,
+          .reader-content h1 p:last-child,
+          .reader-content h2 p:last-child {
+             margin-bottom: 0 !important;
+          }
+
+          /* Poem, Stanza, Verse (<poem>, <stanza>, <v>) Support */
+          .reader-content poem,
+          .reader-content .poem {
+             display: block !important;
+             margin: 1.2em 0 1.2em 1.5em !important;
+             padding-left: 0.75em !important;
+             border-left: 2px solid rgba(128, 128, 128, 0.35) !important;
+          }
+
+          .reader-content stanza,
+          .reader-content .stanza {
+             display: block !important;
+             margin-top: 0.8em !important;
+             margin-bottom: 0.8em !important;
+          }
+
+          .reader-content v,
+          .reader-content .verse,
+          .reader-content p.verse {
+             display: block !important;
+             text-indent: 0 !important;
+             margin-top: 0.15em !important;
+             margin-bottom: 0.15em !important;
+             line-height: 1.4 !important;
+             text-align: left !important;
+          }
+
+          /* COMPREHENSIVE MANDATORY ITALIC FOR ALL QUOTES, EPIGRAPHS, CITATIONS, ANNOTATIONS & AUTHORS */
+          .reader-content poem,
+          .reader-content .poem,
+          .reader-content stanza,
+          .reader-content .stanza,
+          .reader-content v,
+          .reader-content .verse,
+          .reader-content epigraph,
+          .reader-content .epigraph,
+          .reader-content [class*="epigraph"],
+          .reader-content [class*="Epigraph"],
+          .reader-content cite,
+          .reader-content .cite,
+          .reader-content [class*="cite"],
+          .reader-content [class*="Cite"],
+          .reader-content blockquote,
+          .reader-content [class*="quote"],
+          .reader-content [class*="Quote"],
+          .reader-content [class*="blockquote"],
+          .reader-content [class*="Blockquote"],
+          .reader-content annotation,
+          .reader-content .annotation,
+          .reader-content [class*="annotation"],
+          .reader-content [class*="Annotation"],
+          .reader-content text-author,
+          .reader-content .text-author,
+          .reader-content [class*="text-author"],
+          .reader-content [class*="author"],
+          .reader-content [class*="Author"],
+          .reader-content poem *,
+          .reader-content .poem *,
+          .reader-content stanza *,
+          .reader-content .stanza *,
+          .reader-content v *,
+          .reader-content .verse *,
+          .reader-content epigraph *,
+          .reader-content .epigraph *,
+          .reader-content [class*="epigraph"] *,
+          .reader-content [class*="Epigraph"] *,
+          .reader-content cite *,
+          .reader-content .cite *,
+          .reader-content [class*="cite"] *,
+          .reader-content [class*="Cite"] *,
+          .reader-content blockquote *,
+          .reader-content [class*="quote"] *,
+          .reader-content [class*="Quote"] *,
+          .reader-content [class*="blockquote"] *,
+          .reader-content [class*="Blockquote"] *,
+          .reader-content annotation *,
+          .reader-content .annotation *,
+          .reader-content [class*="annotation"] *,
+          .reader-content [class*="Annotation"] *,
+          .reader-content text-author *,
+          .reader-content .text-author *,
+          .reader-content [class*="text-author"] *,
+          .reader-content [class*="author"] *,
+          .reader-content [class*="Author"] * {
+             font-style: italic !important;
+          }
+
+          .reader-content epigraph,
+          .reader-content .epigraph,
+          .reader-content [class*="epigraph"] {
+             display: block !important;
+             margin: 1.2em 0 1.2em auto !important;
+             max-width: 80% !important;
+             padding-left: 2em !important;
+          }
+
+          .reader-content epigraph p,
+          .reader-content .epigraph p,
+          .reader-content [class*="epigraph"] p {
+             text-indent: 0 !important;
+             margin: 0.3em 0 !important;
+          }
+
+          .reader-content cite,
+          .reader-content .cite,
+          .reader-content [class*="cite"],
+          .reader-content blockquote,
+          .reader-content [class*="quote"],
+          .reader-content [class*="blockquote"] {
+             display: block !important;
+             margin: 1.5em 0 1.5em 1.5em !important;
+             padding-left: 0.75em !important;
+             border-left: 3px solid rgba(128, 128, 128, 0.4) !important;
+             ${appStyle === 'Bimbo' ? `border-left-color: ${theme === 'light' ? '#FBCFE8' : '#be123c'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `border-left-color: ${theme === 'light' ? '#d97706' : '#dfc894'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `border-left-color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
+          }
+
+          .reader-content cite p,
+          .reader-content .cite p,
+          .reader-content [class*="cite"] p,
+          .reader-content blockquote p,
+          .reader-content [class*="quote"] p,
+          .reader-content [class*="blockquote"] p {
+             text-indent: 0 !important;
+             margin: 0.4em 0 !important;
+          }
+
+          .reader-content text-author:not(.book-cover-page *):not(.titlepage *):not(.title-page *):not(.title_page *):not([class*="titlepage"] *),
+          .reader-content .text-author:not(.book-cover-page *):not(.titlepage *):not(.title-page *):not(.title_page *):not([class*="titlepage"] *),
+          .reader-content [class*="text-author"]:not(.book-cover-page *):not(.titlepage *):not(.title-page *):not(.title_page *):not([class*="titlepage"] *),
+          .reader-content [class*="author"]:not(.book-cover-author):not([class*="book-cover"]):not(.book-cover-page *):not(.titlepage *):not(.title-page *):not(.title_page *):not([class*="titlepage"] *) {
+             display: block !important;
+             text-align: right !important;
+             text-align-last: right !important;
+             -webkit-text-align-last: right !important;
+             text-indent: 0 !important;
+             margin-top: 0.5em !important;
+             margin-bottom: 0.5em !important;
+             opacity: 0.85 !important;
+          }
+
+          /* Tables Typography & Layout - smaller font size than main text, strictly no first-line indent */
+          .reader-content table,
+          .reader-content table *,
+          .reader-content table th,
+          .reader-content table td,
+          .reader-content table tr,
+          .reader-content table thead,
+          .reader-content table tbody,
+          .reader-content table tfoot,
+          .reader-content table p,
+          .reader-content table div,
+          .reader-content table span,
+          .reader-content table em,
+          .reader-content table strong,
+          .reader-content table b,
+          .reader-content table i,
+          .reader-content table a,
+          .reader-content table li,
+          .reader-content table blockquote {
+             text-indent: 0 !important;
+             margin-left: 0;
+          }
+
+          .reader-content table,
+          .reader-content table th,
+          .reader-content table td,
+          .reader-content table p,
+          .reader-content table span,
+          .reader-content table div,
+          .reader-content table em,
+          .reader-content table strong,
+          .reader-content table b,
+          .reader-content table i,
+          .reader-content table a,
+          .reader-content table li,
+          .reader-content table blockquote {
+             font-size: 0.85em !important;
+             line-height: 1.35 !important;
+          }
+
+          /* Scrollable Table Wrapper */
+          .reader-content .table-scroll-wrapper {
+             display: block !important;
+             width: 100% !important;
+             max-width: 100% !important;
+             overflow-x: auto !important;
+             overflow-y: hidden !important;
+             -webkit-overflow-scrolling: touch !important;
+             margin: 1.2em 0 !important;
+             text-indent: 0 !important;
+             padding-bottom: 4px !important;
+          }
+
+          .reader-content .table-scroll-wrapper::-webkit-scrollbar {
+             height: 6px !important;
+          }
+
+          .reader-content .table-scroll-wrapper::-webkit-scrollbar-track {
+             background: rgba(128, 128, 128, 0.08) !important;
+             border-radius: 4px !important;
+          }
+
+          .reader-content .table-scroll-wrapper::-webkit-scrollbar-thumb {
+             background: rgba(128, 128, 128, 0.3) !important;
+             border-radius: 4px !important;
+          }
+
+          .reader-content .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+             background: rgba(128, 128, 128, 0.5) !important;
+          }
+
+          .reader-content table {
+             width: 100% !important;
+             min-width: 100% !important;
+             max-width: none !important;
+             border-collapse: collapse !important;
+             margin: 0 auto !important;
+             display: table !important;
+             box-sizing: border-box !important;
+             word-break: normal !important;
+             overflow-wrap: break-word !important;
+             text-indent: 0 !important;
+          }
+
+          .reader-content table th,
+          .reader-content table td {
+             padding: 0.35em 0.55em !important;
+             border: 1px solid rgba(128, 128, 128, 0.28) !important;
+             vertical-align: top !important;
+             text-align: left !important;
+             text-align-last: left !important;
+             -webkit-text-align-last: left !important;
+             text-justify: auto !important;
+             -webkit-text-justify: auto !important;
+             word-spacing: normal !important;
+             letter-spacing: normal !important;
+             text-indent: 0 !important;
+             box-sizing: border-box !important;
+             ${appStyle === 'Bimbo' ? `border-color: ${theme === 'light' ? '#FBCFE8' : '#be123c'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `border-color: ${theme === 'light' ? 'rgba(217, 119, 6, 0.35)' : 'rgba(223, 200, 148, 0.35)'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `border-color: ${theme === 'light' ? 'rgba(153, 27, 27, 0.35)' : 'rgba(245, 158, 11, 0.35)'} !important;` : ''}
+          }
+
+          .reader-content table th {
+             font-weight: bold !important;
+             text-align: left !important;
+             text-align-last: left !important;
+             -webkit-text-align-last: left !important;
+             background-color: rgba(128, 128, 128, 0.08) !important;
+             ${appStyle === 'Bimbo' ? `background-color: ${theme === 'light' ? 'rgba(251, 207, 232, 0.3)' : 'rgba(190, 18, 60, 0.2)'} !important;` : ''}
+             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `background-color: ${theme === 'light' ? 'rgba(217, 119, 6, 0.1)' : 'rgba(223, 200, 148, 0.12)'} !important;` : ''}
+             ${appStyle === 'Dragon' ? `background-color: ${theme === 'light' ? 'rgba(153, 27, 27, 0.1)' : 'rgba(245, 158, 11, 0.12)'} !important;` : ''}
+          }
+
+          .reader-content table td p,
+          .reader-content table th p,
+          .reader-content table p,
+          .reader-content table div {
+             text-indent: 0 !important;
+             margin: 0.15em 0 !important;
+             padding: 0 !important;
+             text-align: left !important;
+             text-align-last: left !important;
+             -webkit-text-align-last: left !important;
+             text-justify: auto !important;
+             -webkit-text-justify: auto !important;
+             word-spacing: normal !important;
+             letter-spacing: normal !important;
+          }
+
+          /* Lists (Ordered & Unordered) Typography & Layout - slightly smaller font size than main body text */
+          .reader-content ul,
+          .reader-content ol {
+             margin: 0.9em 0 0.9em 1.5em !important;
+             padding-left: 0.5em !important;
+          }
+
+          .reader-content ul {
+             list-style-type: disc !important;
+             text-indent: 0 !important;
+          }
+
+          .reader-content ol {
+             list-style-type: decimal !important;
+          }
+
+          .reader-content ul li,
+          .reader-content ol li,
+          .reader-content li,
+          .reader-content li p,
+          .reader-content li div,
+          .reader-content li span,
+          .reader-content li em,
+          .reader-content li strong,
+          .reader-content li b,
+          .reader-content li i,
+          .reader-content li a {
+             font-size: 0.85em !important;
+             line-height: 1.38 !important;
+          }
+
+          /* Bulleted lists: NO first-line indent (красная строка убрана) */
+          .reader-content ul,
+          .reader-content ul li,
+          .reader-content ul li p,
+          .reader-content ul li div,
+          .reader-content ul li span,
+          .reader-content ul p {
+             text-indent: 0 !important;
+          }
+
+          /* Numbered lists: Keep first-line indent (красная строка оставлена) */
+          .reader-content ol li,
+          .reader-content ol li p,
+          .reader-content ol li div,
+          .reader-content ol p {
+             text-indent: 1.5em;
+          }
+
+          .reader-content li {
+             margin-bottom: 0.35em !important;
+          }
+
+          .reader-content li p {
+             margin: 0.15em 0 !important;
+          }
+          
+          /* Cover Page Specifics - Centered Title & Author on Title/Cover Page */
+          .reader-content .book-cover-page,
+          .reader-content .titlepage,
+          .reader-content .title-page,
+          .reader-content .title_page,
+          .reader-content [class*="titlepage"] {
+             font-size: 16px !important;
+             line-height: 1.4 !important;
+             display: flex !important;
+             flex-direction: column !important;
+             align-items: center !important;
+             justify-content: center !important;
+             text-align: center !important;
+             text-align-last: center !important;
+             -webkit-text-align-last: center !important;
+             -moz-text-align-last: center !important;
+             width: 100% !important;
+             max-height: 100% !important;
+             box-sizing: border-box !important;
+             margin: 0 auto !important;
+             padding: 0 !important;
+          }
+          .reader-content .book-cover-page h1, 
+          .reader-content .book-cover-page h2,
+          .reader-content .book-cover-page .title,
+          .reader-content .book-cover-page .book-cover-title,
+          .reader-content .book-cover-title,
+          .reader-content .titlepage h1,
+          .reader-content .titlepage h2,
+          .reader-content .titlepage .title,
+          .reader-content .title-page h1,
+          .reader-content .title-page h2,
+          .reader-content .title-page .title,
+          .reader-content .title_page h1,
+          .reader-content .title_page h2,
+          .reader-content .title_page .title,
+          .reader-content [class*="titlepage"] h1,
+          .reader-content [class*="titlepage"] h2,
+          .reader-content [class*="titlepage"] .title {
+             border-bottom: 0 !important;
+             border: none !important;
+             padding-bottom: 0 !important;
+             margin: 0 auto 0.4em auto !important;
+             font-size: 19px !important;
+             line-height: 25px !important;
+             font-weight: 700 !important;
+             text-align: center !important;
+             text-align-last: center !important;
+             -webkit-text-align-last: center !important;
+             -moz-text-align-last: center !important;
+             text-indent: 0 !important;
+             display: block !important;
+             width: 100% !important;
+             max-width: 90% !important;
+          }
+          .reader-content .book-cover-page .book-cover-author,
+          .reader-content .book-cover-page .author,
+          .reader-content .book-cover-page [class*="author"],
+          .reader-content .book-cover-page .text-author,
+          .reader-content .book-cover-author,
+          .reader-content .titlepage .author,
+          .reader-content .titlepage .text-author,
+          .reader-content .titlepage [class*="author"],
+          .reader-content .title-page .author,
+          .reader-content .title-page .text-author,
+          .reader-content .title-page [class*="author"],
+          .reader-content .title_page .author,
+          .reader-content .title_page .text-author,
+          .reader-content .title_page [class*="author"],
+          .reader-content [class*="titlepage"] .author,
+          .reader-content [class*="titlepage"] .text-author,
+          .reader-content [class*="titlepage"] [class*="author"] {
+             font-size: 14px !important;
+             line-height: 19px !important;
+             font-style: italic !important;
+             opacity: 0.75 !important;
+             text-align: center !important;
+             text-align-last: center !important;
+             -webkit-text-align-last: center !important;
+             -moz-text-align-last: center !important;
+             text-indent: 0 !important;
+             margin: 0 auto !important;
+             display: block !important;
+             width: 100% !important;
+             max-width: 85% !important;
+          }
+          .reader-content .book-cover-page .book-cover-image-container {
+             display: flex !important;
+             justify-content: center !important;
+             align-items: center !important;
+             width: 100% !important;
+             margin: 0 0 12px 0 !important;
+             flex-shrink: 1 !important;
+             min-height: 0 !important;
+          }
+          .reader-content .book-cover-page img,
+          .reader-content .book-cover-page .book-cover-image {
+             max-width: 80% !important;
+             max-height: calc(100vh - 300px) !important;
+             height: auto !important;
+             object-fit: contain !important;
+             display: block !important;
+             margin: 0 auto !important;
+             border-radius: 4px;
+             flex-shrink: 1 !important;
+          }
+          
+          /* Images */
+          .reader-content img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 1em auto;
+            cursor: zoom-in; /* Indicate clickability */
+          }
+          
+          /* Links (Footnotes & Refs) */
+          .reader-content a {
+            color: inherit !important;
+            text-decoration-line: underline;
+            text-decoration-style: solid;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 4px;
+            cursor: pointer;
+            opacity: 0.75;
+          }
+          .reader-content a:hover {
+            opacity: 1;
+            text-decoration-thickness: 2px;
+          }
+          
+          /* Search highlight without shifting text layout */
+          mark.search-highlight {
+            display: inline !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            font-weight: inherit !important;
+            font-style: inherit !important;
+            font-size: inherit !important;
+            line-height: inherit !important;
+            letter-spacing: inherit !important;
+            word-spacing: inherit !important;
+            box-shadow: none !important;
+            border-radius: 2px !important;
+            color: inherit !important;
+            box-decoration-break: clone !important;
+            -webkit-box-decoration-break: clone !important;
+            position: relative !important;
+            z-index: 10 !important;
+          }
+
+          /* Footnotes Section Styling (fixed standard small compact typography) */
+          .reader-content.is-notes-chapter,
+          .reader-content .notes-list,
+          .reader-content .note-entry,
+          .reader-content .note-content,
+          .reader-content .note-content span,
+          .reader-content .note-content p,
+          .reader-content .note-content div,
+          .reader-content .note-content strong,
+          .reader-content .note-content em,
+          .reader-content .note-content a {
+             font-size: 13px !important;
+             line-height: 1.5 !important;
+          }
+
+          .reader-content.is-notes-chapter h1,
+          .reader-content.is-notes-chapter .title,
+          .reader-content.is-notes-chapter h2,
+          .reader-content.is-notes-chapter h3,
+          .reader-content .notes-title {
+             font-size: 20px !important;
+             line-height: 1.35 !important;
+             margin-top: 0.5rem !important;
+             margin-bottom: 1.25rem !important;
+          }
+
+          .reader-content .notes-list {
+             margin-top: 1.25rem !important;
+          }
+
+          .reader-content .note-entry {
+             display: block !important;
+             margin-bottom: 1rem !important;
+             text-indent: 0 !important;
+             line-height: 1.5 !important;
+          }
+
+          .reader-content .note-entry p {
+             display: inline !important;
+             margin: 0 !important;
+             text-indent: 0 !important;
+             line-height: inherit !important;
+          }
+
+          .reader-content .note-content {
+             display: inline !important;
+             line-height: inherit !important;
+          }
+
+          .reader-content .note-back-link {
+             text-decoration: none !important;
+             font-weight: bold;
+             font-size: 11.5px !important;
+             line-height: 1 !important;
+             background: rgba(128,128,128,0.18);
+             padding: 1.5px 4.5px !important;
+             margin-right: 5px !important;
+             border-radius: 4px;
+             display: inline-flex !important;
+             align-items: center;
+             justify-content: center;
+             vertical-align: 1px;
+             transition: background-color 0.15s ease, transform 0.1s ease;
+             cursor: pointer;
+          }
+
+          .reader-content .note-back-link:hover {
+             background: rgba(128,128,128,0.35);
+             transform: scale(1.08);
+          }
+
+          .reader-content .note-divider {
+             width: 20%;
+             margin-top: 0.6rem;
+             margin-bottom: 0.6rem;
+             border-top: 1px solid rgba(128,128,128, 0.25);
+          }
+
+          /* Pseudo-page viewport styling */
+          .pseudo-page-viewport {
+             position: relative;
+             width: 100%;
+             overflow: hidden;
+             contain: paint;
+          }
+          .pseudo-page-viewport .reader-content img {
+             max-height: calc(100vh - 240px) !important;
+             width: auto !important;
+             max-width: 100% !important;
+             object-fit: contain !important;
+          }
+        `}</style>
+        
+        {(() => {
+            const hasTopHeader = isPagedMode && pageIndex > 0 && Boolean(currentChapterTitle) && !isCoverPage;
+            
+            const screenH = containerRef.current?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 800);
+            
+            let sat = 0, sab = 0;
+            if (typeof window !== 'undefined') {
+                const style = getComputedStyle(document.documentElement);
+                sat = parseInt(style.getPropertyValue('--sat')) || 0;
+                sab = parseInt(style.getPropertyValue('--sab')) || 0;
+            }
+
+            // Real top and bottom curtain heights (80px top header, 112px bottom footer)
+            const topCurtainH = 80;
+            const bottomCurtainH = 112;
+            const totalCurtainsH = topCurtainH + bottomCurtainH;
+
+            // Height of 1 empty line based on current font size (line-height = 1.6, or 1.4 for cover)
+            const fontSizePx = isCoverPage ? 16 : (fontSize || 1) * 16;
+            const lineMultiplier = isCoverPage ? 1.4 : 1.6;
+            const oneLineH = isCoverPage ? 20 : Math.round(fontSizePx * lineMultiplier);
+
+            const currentSlice = pageSlices[pageIndex] || pageSlices[0] || { startY: 0, endY: 0, textHeight: 500 };
+            const currentSliceStart = isCoverPage ? 0 : (currentSlice.startY || 0);
+            const currentSliceTextH = isCoverPage 
+                ? Math.max(200, screenH - totalCurtainsH - sat - sab - 40)
+                : Math.max(200, currentSlice.textHeight || (currentSlice.endY - currentSlice.startY) || 500);
+
+            // Exact 1-line distance from top curtain (80px) and bottom curtain (112px)
+            const dynamicPadTop = isCoverPage ? (topCurtainH + 20) : (topCurtainH + oneLineH);
+            const dynamicPadBottom = isCoverPage ? (bottomCurtainH + 20) : (bottomCurtainH + oneLineH);
+
+            return (
+            <div 
+                ref={containerRef}
+                key={propChapterIndex}
+                className={`w-full h-full select-none outline-none ${
+                    isPagedMode 
+                        ? 'relative overflow-hidden flex flex-col justify-start items-center' 
+                        : 'reader-container reader-scroll transition-opacity duration-200 overflow-y-auto'
+                }`}
+                onTouchStart={isPagedMode ? handlePagedTouchStart : undefined}
+                onTouchMove={isPagedMode ? handlePagedTouchMove : undefined}
+                onTouchEnd={isPagedMode ? handlePagedTouchEnd : undefined}
+                onClick={handleTap}
+                onScroll={!isPagedMode ? handleScroll : undefined}
+                style={{ 
+                    fontSize: isCoverPage ? '1rem' : `${fontSize}rem`,
+                    lineHeight: isCoverPage ? '1.4' : '1.6',
+                    paddingTop: isPagedMode ? `calc(${dynamicPadTop}px + env(safe-area-inset-top))` : 'calc(88px + env(safe-area-inset-top))', 
+                    paddingBottom: isPagedMode ? `calc(${dynamicPadBottom}px + env(safe-area-inset-bottom))` : 'calc(120px + env(safe-area-inset-bottom))', 
+                    paddingLeft: '1.25rem',
+                    paddingRight: '1.25rem',
+                    maxWidth: '56rem',
+                    margin: '0 auto',
+                    height: '100%',
+                    overflowY: isPagedMode ? 'hidden' : 'auto'
+                }}
+            >
+                <div 
+                    ref={pagesContainerRef}
+                    className={isPagedMode ? "pseudo-page-viewport w-full relative overflow-hidden" : "w-full"}
+                    style={isPagedMode ? {
+                        height: `${currentSliceTextH}px`,
+                        maxHeight: `${currentSliceTextH}px`,
+                        overflow: 'hidden',
+                        clipPath: 'inset(0px)',
+                        contain: 'paint',
+                        opacity: pageOpacity,
+                        transform: `translateX(${dragOffset + flipOffset}px)`,
+                        transition: isDragging ? 'none' : 'transform 0.18s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.15s ease-out',
+                        willChange: 'opacity, transform'
+                    } : undefined}
+                >
+                    <div 
+                        ref={contentRef}
+                        lang="ru"
+                        onClick={handleContentInteract}
+                        className={`reader-content ${fontSize > 0.9 ? 'reader-large-font' : ''} ${isNotesPage ? 'is-notes-chapter' : ''} prose ${theme === 'light' ? 'prose-stone' : 'prose-invert'} prose-lg max-w-none [&>img]:mx-auto [&>img]:max-w-full [&>img]:h-auto [&>img]:block`}
+                        style={{
+                            fontSize: isCoverPage ? '1rem' : (isNotesPage ? '0.95rem' : `${fontSize}rem`),
+                            lineHeight: isCoverPage ? '1.4' : (isNotesPage ? '1.55' : '1.6'),
+                            ...(isPagedMode ? {
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                transform: `translateY(-${currentSliceStart}px)`,
+                                transition: 'none',
+                                willChange: 'transform'
+                            } : {})
+                        }}
+                        dangerouslySetInnerHTML={{ __html: processedContent }} 
+                    />
+
+                    {/* End of Chapter Line (Replaces Text for scroll mode) */}
+                    {!isPagedMode && (
+                        propChapterIndex < book.chapters.length - 1 ? (
+                             <div className={`w-full flex flex-col items-center justify-center ${isCoverPage ? 'pb-10 pt-10 mt-6' : 'pt-6 pb-8 mt-1'}`}>
+                                 <hr className={`w-16 border-t-2 opacity-25 ${isCoverPage ? 'mb-6' : 'mb-10'} ${hrClasses}`} />
+                                 
+                                 <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onChapterChange(propChapterIndex + 1, 'start');
+                                    }}
+                                    className={`flex items-center gap-2 px-6 py-2 rounded-full border transition-all group shadow-md opacity-80 hover:opacity-100 ${nextBtnClasses}`}
+                                 >
+                                    <span className={appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : (appStyle === 'Dragon' ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
+                                        {appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Dragon' ? 'Roll for Initiative 🎲' : appStyle === 'Marcel' ? 'Turn page 🍵' : 'Continue')))}
+                                    </span>
+                                    <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                                 </button>
+                             </div>
+                        ) : (
+                            <div className="pt-6 pb-12 flex flex-col items-center justify-center">
+                                 <hr className={`w-48 border-t-2 opacity-40 ${hrClasses}`} />
+                            </div>
+                        )
+                    )}
+                </div>
+
+                {isPagedMode && (
+                    <>
+                        {/* Subtle side paper edge shadows */}
+                        <div className="absolute inset-y-0 right-0 w-6 pointer-events-none opacity-20 bg-gradient-to-l from-black/40 to-transparent z-10" />
+                        <div className="absolute inset-y-0 left-0 w-6 pointer-events-none opacity-20 bg-gradient-to-r from-black/40 to-transparent z-10" />
+
+                        {/* Top Stylized Divider Line along edge of top panel */}
+                        <div 
+                            className={`absolute left-5 right-5 top-[calc(80px+env(safe-area-inset-top))] h-[1px] pointer-events-none z-10 transition-opacity duration-300 ${
+                                hasTopHeader && !uiVisible ? 'opacity-100' : 'opacity-0'
+                            } ${
+                                theme === 'light' 
+                                  ? (appStyle === 'Bimbo' ? 'bg-[#BE123C]/25' : appStyle === 'Surf' ? 'bg-[#0369a1]/25' : appStyle === 'Marcel' ? 'bg-[#544372]/25' : 'bg-stone-300/80')
+                                  : (appStyle === 'Bimbo' ? 'bg-[#e8cbd5]/25' : appStyle === 'Surf' ? 'bg-[#b5cbd6]/25' : appStyle === 'Marcel' ? 'bg-[#c4b5e6]/25' : 'bg-stone-700/80')
+                            }`}
+                        />
+
+                        {/* Top Running Header: Chapter Title */}
+                        <div 
+                            className="absolute top-0 left-0 right-0 h-[calc(80px+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] flex justify-center items-center pointer-events-none z-10 px-8"
+                        >
+                            <span 
+                                style={{ fontFamily: readerFontCSS }}
+                                className={`text-base sm:text-lg md:text-xl tracking-wide line-clamp-1 leading-tight break-words max-w-[85%] text-center font-medium select-none transition-opacity duration-300 ${
+                                    hasTopHeader && !uiVisible ? 'opacity-75' : 'opacity-0'
+                                } ${
+                                    theme === 'light' 
+                                      ? (appStyle === 'Bimbo' ? 'text-[#881337]' : appStyle === 'Surf' ? 'text-[#0369a1]' : appStyle === 'Marcel' ? 'text-[#544372]' : 'text-stone-700')
+                                      : (appStyle === 'Bimbo' ? 'text-[#e8cbd5]' : appStyle === 'Surf' ? 'text-[#b5cbd6]' : appStyle === 'Marcel' ? 'text-[#c4b5e6]' : 'text-stone-300')
+                                }`}
+                            >
+                                {currentChapterTitle}
+                            </span>
+                        </div>
+
+                        {/* Bottom Running Footer: Page Numbers & Toggle */}
+                        <div 
+                            className="absolute bottom-0 left-0 right-0 h-[calc(112px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex justify-center items-center pointer-events-auto z-20 px-8"
+                        >
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    togglePageDisplayMode();
+                                }}
+                                title={
+                                    pageDisplayMode === 'book' 
+                                      ? `Страница книги: ${globalCurrentPage} из ${globalTotalPages} (нажмите для переключения)` 
+                                      : pageDisplayMode === 'chapter' 
+                                        ? `Страница главы: ${chapterCurrentPage} из ${chapterTotalPages} (нажмите для переключения)` 
+                                        : `Прогресс: ${Math.min(100, Math.max(0, Math.round((globalCurrentPage / globalTotalPages) * 100)))}% (нажмите для переключения)`
+                                }
+                                style={{ fontFamily: readerFontCSS }}
+                                className={`cursor-pointer px-3 py-1 rounded-full text-base sm:text-lg md:text-xl tracking-wider font-medium text-center select-none transition-all active:scale-95 ${
+                                    isCoverPage || uiVisible ? 'opacity-0 pointer-events-none' : 'opacity-75 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5'
+                                } ${
+                                    theme === 'light' 
+                                      ? (appStyle === 'Bimbo' ? 'text-[#881337]' : appStyle === 'Surf' ? 'text-[#0369a1]' : appStyle === 'Marcel' ? 'text-[#544372]' : 'text-stone-700')
+                                      : (appStyle === 'Bimbo' ? 'text-[#e8cbd5]' : appStyle === 'Surf' ? 'text-[#b5cbd6]' : appStyle === 'Marcel' ? 'text-[#c4b5e6]' : 'text-stone-300')
+                                }`}
+                            >
+                                {pageDisplayMode === 'chapter' ? (
+                                    `${chapterCurrentPage} / ${chapterTotalPages}`
+                                ) : pageDisplayMode === 'percent' ? (
+                                    `${Math.min(100, Math.max(0, Math.round((globalCurrentPage / globalTotalPages) * 100)))}%`
+                                ) : (
+                                    `${globalCurrentPage} / ${globalTotalPages}`
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Hover Arrows for Desktop */}
+                        {(pageIndex > 0 || propChapterIndex > 0) && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handlePageTurn('prev'); }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white opacity-0 hover:opacity-100 transition-all z-20 hidden md:flex items-center justify-center shadow-md active:scale-90"
+                            >
+                                <ChevronLeft size={22} />
+                            </button>
+                        )}
+
+                        {(pageIndex < totalPages - 1 || propChapterIndex < book.chapters.length - 1) && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handlePageTurn('next'); }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white opacity-0 hover:opacity-100 transition-all z-20 hidden md:flex items-center justify-center shadow-md active:scale-90"
+                            >
+                                <ChevronRight size={22} />
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
+            );
+        })()}
+    </div>
+  );
+};
+
+export default EBookReader;
