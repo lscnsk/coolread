@@ -83,6 +83,8 @@ export function useAppPersistence({
   const fontSizeRef = useRef(fontSize);
   const modeRef = useRef(mode);
   const durationRef = useRef(duration);
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
 
   useEffect(() => { currentBookRef.current = currentBook; }, [currentBook]);
   useEffect(() => { currentChapterIndexRef.current = currentChapterIndex; }, [currentChapterIndex]);
@@ -121,6 +123,8 @@ export function useAppPersistence({
   }, [duration, currentChapterIndex, mode, currentBook?.id]);
 
   // --- Persistence Logic ---
+  const lastSavedSignatureRef = useRef<string | null>(null);
+  const lastActiveIdSavedRef = useRef<string | null>(null);
   const saveState = useCallback(async (force = false): Promise<PersistedState | null> => {
     const book = currentBookRef.current;
     if (!book || !book.id) return null;
@@ -201,8 +205,16 @@ export function useAppPersistence({
         };
     }
     
+    // Nothing changed since the last save (paused, or the reader did not move): skip the write
+    // and the re-render it causes. The timers below call saveState far more often than state changes.
+    const { lastUpdated: _ignored, ...comparable } = state;
+    const signature = JSON.stringify(comparable);
+    if (!force && lastSavedSignatureRef.current === signature) return state;
+    lastSavedSignatureRef.current = signature;
+
     // Persist last active book ID for instant restoration on reload
-    try {
+    if (lastActiveIdSavedRef.current !== book.id) try {
+      lastActiveIdSavedRef.current = book.id;
       if (isNative) {
         Preferences.set({ key: 'cool_read_last_active_book_id', value: book.id });
       }
@@ -245,7 +257,8 @@ export function useAppPersistence({
   // General periodic save (keeps ebook & comic scroll position persisted)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (currentBookRef.current) {
+      // While audio plays, the 5-second autosave above already covers this
+      if (currentBookRef.current && !isPlayingRef.current) {
         saveState();
       }
     }, 10000);

@@ -240,11 +240,12 @@ export const useAudioPlayer = (currentBook: Book | null, currentChapterIndex: nu
         }
         const chapter = currentBookRef.current?.chapters[currentChapterIndexRef.current];
         
-        if (chapter && chapter.startTime !== undefined) {
-            setCurrentTime(Math.max(0, audio.currentTime - chapter.startTime));
-        } else {
-            setCurrentTime(audio.currentTime);
-        }
+        const t = chapter && chapter.startTime !== undefined
+            ? Math.max(0, audio.currentTime - chapter.startTime)
+            : audio.currentTime;
+        // The player shows whole seconds. Updating state only when the second changes (or on a
+        // jump) re-renders the app once a second instead of on every timeupdate event.
+        setCurrentTime(prev => (Math.floor(prev) === Math.floor(t) && Math.abs(prev - t) < 1) ? prev : t);
     };
 
     const updateDuration = () => {
@@ -328,11 +329,8 @@ export const useAudioPlayer = (currentBook: Book | null, currentChapterIndex: nu
     audio.addEventListener('seeked', onSeeked);
     audio.addEventListener('error', onError);
     
-    // Smooth progress update while playing
-    let interval: any;
-    if (isPlaying) {
-        interval = setInterval(updateTime, 250);
-    }
+    // 'timeupdate' fires several times a second while playing, which is enough for a
+    // display of whole seconds, so no extra timer is needed.
 
     return () => {
         audio.removeEventListener('timeupdate', onTimeUpdate);
@@ -343,7 +341,6 @@ export const useAudioPlayer = (currentBook: Book | null, currentChapterIndex: nu
         audio.removeEventListener('playing', onPlaying);
         audio.removeEventListener('seeked', onSeeked);
         audio.removeEventListener('error', onError);
-        if (interval) clearInterval(interval);
     };
   }, [isPlaying, safePlay]); 
 

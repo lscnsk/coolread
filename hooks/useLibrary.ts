@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Book, Chapter, AppMode, PersistedState } from '../types';
-import { getAllPersistentBooks, saveBookToDB, deleteBookFromDB, purgeDeletedBooksFromDB, unmarkBookAsDeleted } from '../utils/db';
+import { getAllPersistentBooks, saveBookToDB, deleteBookFromDB, purgeDeletedBooksFromDB, unmarkBookAsDeleted, getAllCovers, saveCoverToDB } from '../utils/db';
 import { getAudioDuration } from '../utils/audio';
 import { parseM4AChapters } from '../utils/mp4chapters';
 /**
@@ -1189,9 +1189,38 @@ export function useLibrary({
           if (metaVal) loadedMeta = JSON.parse(metaVal);
         } catch (e) {}
 
+        // Library covers: from IndexedDB, or (saved by 1.88 and older) base64 inside the
+        // metadata setting. Those move to IndexedDB once and the setting is rewritten without them.
+        const storedCovers = await getAllCovers();
+        const legacyCoverIds = Object.keys(loadedMeta).filter(id => typeof loadedMeta[id]?.coverUrl === 'string' && loadedMeta[id].coverUrl.startsWith('data:'));
+        if (legacyCoverIds.length > 0) {
+          (async () => {
+            try {
+              for (const id of legacyCoverIds) {
+                if (!storedCovers.has(id)) {
+                  const blob = await (await fetch(loadedMeta[id].coverUrl)).blob();
+                  await saveCoverToDB(id, blob);
+                }
+              }
+              const raw = isNative ? (await Preferences.get({ key: 'cool_read_metadata' })).value : localStorage.getItem('cool_read_metadata');
+              const latest = raw ? JSON.parse(raw) : {};
+              for (const id of legacyCoverIds) {
+                if (latest[id] && latest[id].coverUrl === loadedMeta[id].coverUrl) delete latest[id].coverUrl;
+              }
+              const str = JSON.stringify(latest);
+              if (isNative) await Preferences.set({ key: 'cool_read_metadata', value: str });
+              else localStorage.setItem('cool_read_metadata', str);
+              setBookMetadataMap(latest);
+            } catch (e) {
+              console.warn("Cover migration failed, will retry next start", e);
+            }
+          })();
+        }
+
         if (persistentBooks && persistentBooks.length > 0) {
           hydratedPersistent = persistentBooks.map(book => {
             const meta = loadedMeta[book.id];
+            const storedCover = storedCovers.get(book.id);
             
             return {
               ...book,
@@ -1199,7 +1228,7 @@ export function useLibrary({
               title: meta?.title || book.title,
               author: meta?.author || book.author,
               series: meta?.series || book.series,
-              coverUrl: meta?.coverUrl || (book.coverFile && (book.coverFile instanceof Blob || book.coverFile instanceof File)
+              coverUrl: (storedCover ? URL.createObjectURL(storedCover) : '') || meta?.coverUrl || (book.coverFile && (book.coverFile instanceof Blob || book.coverFile instanceof File)
                 ? URL.createObjectURL(book.coverFile)
                 : book.coverUrl),
               chapters: dropFileOffsetsForMultiFileAudio(book).map((ch: any) => {

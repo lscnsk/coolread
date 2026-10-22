@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Play, Pause, ZoomIn, ZoomOut, Plus, Minus, S
 import { getFontFamilyCSS } from '../utils/fonts';
 import { registerReader } from '../utils/readAloud';
 import { accentOf, coverData } from '../utils/nowPlaying';
+import { sanitizeHtml, sanitizeNode } from '../utils/sanitize';
 // @ts-ignore
 import Hypher from 'hypher';
 // @ts-ignore
@@ -187,7 +188,7 @@ function transformChapterContent(
 ): string {
   if (!rawContent) return "";
   if (isCoverPage) {
-    return rawContent
+    return sanitizeHtml(rawContent)
       .replace(/<p class="book-cover-author"/gi, '<div class="book-cover-author"')
       .replace(/<h2 class="book-cover-author"/gi, '<div class="book-cover-author"')
       .replace(/<h1 class="book-cover-title"/gi, '<div class="book-cover-title"');
@@ -217,6 +218,7 @@ function transformChapterContent(
     .replace(/<\/(?:[a-zA-Z0-9]+:)?date>/gi, '</div>');
 
   const doc = parser.parseFromString(prepared, 'text/html');
+  sanitizeNode(doc.body);
 
   // 1. Convert FB2 <emphasis> to <em>
   const emphasisNodes = doc.querySelectorAll('emphasis');

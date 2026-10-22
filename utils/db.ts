@@ -5,6 +5,9 @@ const FONTS_STORE = 'fonts';
 // Parsed chapter text lives apart from the book record, so the library
 // can load at startup without pulling every book's full text into memory.
 const CONTENT_STORE = 'book_content';
+// Library covers (small JPEG Blobs keyed by book id). They used to live as base64
+// inside the 'cool_read_metadata' setting, which was rewritten whole on every change.
+const COVERS_STORE = 'covers';
 
 // Bump when ebook parsing output changes so saved books are re-parsed on open.
 // v4: FB2 sections of levels 1-2 are pages; "###" and deeper stay on the level-2 page.
@@ -34,7 +37,7 @@ export const stripChapterContent = <T extends { chapters?: any[]; format?: strin
 
 export const initDB = () => {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 4); // v3: fonts, v4: book_content
+    const request = indexedDB.open(DB_NAME, 5); // v3: fonts, v4: book_content, v5: covers
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = (e) => {
@@ -50,6 +53,9 @@ export const initDB = () => {
       }
       if (!db.objectStoreNames.contains(CONTENT_STORE)) {
         db.createObjectStore(CONTENT_STORE, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(COVERS_STORE)) {
+        db.createObjectStore(COVERS_STORE);
       }
     };
   });
@@ -134,12 +140,13 @@ export const deleteBookFromDB = async (id: string, _title?: string): Promise<voi
   try {
     const db = await initDB();
     return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([BOOKS_STORE, CONTENT_STORE], 'readwrite');
+      const tx = db.transaction([BOOKS_STORE, CONTENT_STORE, COVERS_STORE], 'readwrite');
       const store = tx.objectStore(BOOKS_STORE);
       
       // Delete primary record by ID
       store.delete(id);
       tx.objectStore(CONTENT_STORE).delete(id);
+      tx.objectStore(COVERS_STORE).delete(id);
 
       // Also clean up any lingering records matching this exact ID or normalized path
       const normId = id.replace(/^\/+/, '');
@@ -154,6 +161,7 @@ export const deleteBookFromDB = async (id: string, _title?: string): Promise<voi
             const isMatch = val.id === id || (valNormId && valNormId === normId);
             if (isMatch) {
               tx.objectStore(CONTENT_STORE).delete(val.id);
+              tx.objectStore(COVERS_STORE).delete(val.id);
               cursor.delete();
             }
           }
@@ -176,9 +184,13 @@ export const purgeDeletedBooksFromDB = async (deletedIds: string[]): Promise<voi
 
     const db = await initDB();
     return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([BOOKS_STORE, CONTENT_STORE], 'readwrite');
+      const tx = db.transaction([BOOKS_STORE, CONTENT_STORE, COVERS_STORE], 'readwrite');
       const store = tx.objectStore(BOOKS_STORE);
-      deletedIds.forEach(id => { if (typeof id === 'string') tx.objectStore(CONTENT_STORE).delete(id); });
+      deletedIds.forEach(id => {
+        if (typeof id !== 'string') return;
+        tx.objectStore(CONTENT_STORE).delete(id);
+        tx.objectStore(COVERS_STORE).delete(id);
+      });
       const req = store.openCursor();
       req.onsuccess = (e) => {
         const cursor = (e.target as IDBRequest).result as IDBCursorWithValue | null;
@@ -190,6 +202,7 @@ export const purgeDeletedBooksFromDB = async (deletedIds: string[]): Promise<voi
             const isDel = deletedIds.includes(val.id) || (valNormId && normDeleted.includes(valNormId));
             if (isDel) {
               tx.objectStore(CONTENT_STORE).delete(val.id);
+              tx.objectStore(COVERS_STORE).delete(val.id);
               cursor.delete();
             }
           }
@@ -260,4 +273,43 @@ export const loadBookContent = async (book: { id: string; format?: string; chapt
     console.error("Error loading book content:", e);
     return null;
   }
+};
+
+/** Saves a book's library cover, or removes it when blob is null. */
+export const saveCoverToDB = async (id: string, blob: Blob | null): Promise<void> => {
+  try {
+    const db = await initDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(COVERS_STORE, 'readwrite');
+      if (blob) tx.objectStore(COVERS_STORE).put(blob, id);
+      else tx.objectStore(COVERS_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Error saving cover:", e);
+  }
+};
+
+/** All saved library covers by book id. */
+export const getAllCovers = async (): Promise<Map<string, Blob>> => {
+  const covers = new Map<string, Blob>();
+  try {
+    const db = await initDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(COVERS_STORE, 'readonly');
+      const req = tx.objectStore(COVERS_STORE).openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) return;
+        if (cursor.value instanceof Blob) covers.set(String(cursor.key), cursor.value);
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Error loading covers:", e);
+  }
+  return covers;
 };

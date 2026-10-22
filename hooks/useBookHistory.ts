@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { PersistedState } from '../types';
+import { saveCoverToDB } from '../utils/db';
 
 function resizeImage(imageUrl: string, maxWidth: number = 640, quality: number = 0.8): Promise<string> {
   return new Promise((resolve) => {
@@ -104,11 +105,19 @@ export function useBookHistory() {
   const saveMetadata = useCallback(async (id: string, title: string, author?: string, coverUrl?: string, format?: string, series?: string) => {
     let finalCoverUrl = coverUrl;
     if (coverUrl && (coverUrl.startsWith('data:') || coverUrl.startsWith('blob:'))) {
+      // Local covers go to IndexedDB as a Blob; the setting keeps text only
+      let blob: Blob | null = null;
       try {
-        finalCoverUrl = await resizeImage(coverUrl, 640, 0.8);
+        const small = await resizeImage(coverUrl, 640, 0.8);
+        blob = await (await fetch(small)).blob();
       } catch (e) {
-        console.warn("Failed to compress cover image", e);
+        console.warn("Failed to store cover image", e);
       }
+      await saveCoverToDB(id, blob);
+      finalCoverUrl = undefined;
+    } else {
+      // A web cover (or none): drop any stored local cover so it does not override it
+      await saveCoverToDB(id, null);
     }
 
     setBookMetadataMap(prev => {

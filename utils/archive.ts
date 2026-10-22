@@ -89,21 +89,17 @@ export const parseComic = async (file: Blob, bookId: string): Promise<Partial<Bo
             const zip = await JSZip.loadAsync(arrayBuffer);
             const imageFiles: { path: string, blob: Blob }[] = [];
 
-            const promises: Promise<void>[] = [];
+            // Unpack pages one at a time: decompressing all of them in parallel kept every
+            // intermediate buffer alive at once and could exhaust memory on a large CBZ.
+            const entries: JSZip.JSZipObject[] = [];
             zip.forEach((relativePath, fileEntry) => {
-                if (!fileEntry.dir && /\.(jpg|jpeg|png|webp|gif)$/i.test(relativePath)) {
-                    promises.push(
-                        fileEntry.async('blob').then(blob => {
-                            imageFiles.push({
-                                path: relativePath,
-                                blob: new Blob([blob], { type: getMimeType(relativePath) })
-                            });
-                        })
-                    );
-                }
+                if (!fileEntry.dir && /\.(jpg|jpeg|png|webp|gif)$/i.test(relativePath)) entries.push(fileEntry);
             });
-
-            await Promise.all(promises);
+            for (const entry of entries) {
+                const blob = await entry.async('blob');
+                // slice() sets the type without copying the bytes
+                imageFiles.push({ path: entry.name, blob: blob.slice(0, blob.size, getMimeType(entry.name)) });
+            }
 
             if (imageFiles.length === 0) {
                 throw new Error("No images found in CBZ archive.");
