@@ -757,7 +757,9 @@ export async function drawCover(title: string, author: string): Promise<{ base64
     if (!g) return undefined;
     const serif = "Literata, Georgia, 'Times New Roman', serif";
     try {
-      await Promise.all([(document as any).fonts?.load(`700 80px Literata`), (document as any).fonts?.load(`400 40px Literata`)]);
+      // The font comes in pieces by alphabet: ask for the cover's own letters, or only the Latin piece loads
+      const sample = `${title} ${author} АБВабв`;
+      await Promise.all([document.fonts?.load(`700 80px "Literata"`, sample.toUpperCase()), document.fonts?.load(`400 40px "Literata"`, sample)]);
     } catch {}
     const paper = '#f5efe3', ink = '#2a2420';
     g.fillStyle = paper; g.fillRect(0, 0, W, H);
