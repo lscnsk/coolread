@@ -107,7 +107,7 @@ public class BrowserActivity extends AppCompatActivity {
         reload.setOnClickListener(v -> webView.reload());
         TextView close = barButton("❌", dp);
         close.setOnClickListener(v -> finish());
-        // On az.lib.ru and Wikisource the page itself is the book: the app turns it into an fb2
+        // On az.lib.ru the page itself is the book: the app turns it into an fb2
         saveBook = barButton("📥", dp);
         saveBook.setVisibility(View.GONE);
         saveBook.setOnClickListener(v -> savePageAsBook());
@@ -241,7 +241,7 @@ public class BrowserActivity extends AppCompatActivity {
         if (url == null) return false;
         try {
             String host = new URL(url).getHost().toLowerCase();
-            return host.equals("az.lib.ru") || host.endsWith(".az.lib.ru") || host.endsWith("wikisource.org");
+            return host.equals("az.lib.ru") || host.endsWith(".az.lib.ru");
         } catch (Exception e) {
             return false;
         }

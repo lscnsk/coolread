@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import { parseAzLib, importWikisource, buildFb2, webBookSite } from '../utils/webBook';
+import { parseAzLib, buildFb2, webBookSite } from '../utils/webBook';
 
 const AZ = `<html><head><title>Lib.ru/Классика: Конрад Джозеф. Лагуна</title></head><body>
 <li>Год: 1897</li>
@@ -13,9 +13,9 @@ const AZ = `<html><head><title>Lib.ru/Классика: Конрад Джозе�
 </body></html>`;
 
 describe('webBookSite', () => {
-  it('recognizes the two sites', () => {
+  it('recognizes az.lib.ru pages', () => {
     expect(webBookSite('http://az.lib.ru/k/konrad_d/text.shtml')).toBe('azlib');
-    expect(webBookSite('https://ru.wikisource.org/wiki/X')).toBe('wikisource');
+    expect(webBookSite('https://ru.wikisource.org/wiki/X')).toBeNull();
     expect(webBookSite('https://example.com/')).toBeNull();
   });
 });
@@ -33,12 +33,5 @@ describe('az.lib.ru', () => {
     expect(xml).toContain('<p>— Хорошо, — ответил он.</p>');
     expect(xml).toMatch(/<title><p>II<\/p><\/title>/);
     expect(new DOMParser().parseFromString(xml, 'text/xml').querySelector('parsererror')).toBeNull();
-  });
-});
-
-describe('Wikisource', () => {
-  it('refuses a list of editions', async () => {
-    const html = `<html><body><h1 id="firstHeading">Капитанская дочка (Пушкин)</h1><span id="ws-title">Список редакций: Капитанская дочка</span><div class="mw-parser-output"><p>x</p></div></body></html>`;
-    await expect(importWikisource('https://ru.wikisource.org/wiki/K', html, async () => '')).rejects.toThrow(/editions/);
   });
 });

@@ -1,17 +1,16 @@
-// Turns a text page from az.lib.ru ("Классика") or ru.wikisource.org into a tidy FB2 book:
-// chapters from the page headings, footnotes, poems and epigraphs, Russian typography,
-// and a generated cover. Used by the 📥 button of the built-in browser.
+// Turns a text page from az.lib.ru ("Классика") into a tidy FB2 book: chapters from the
+// page headings, footnotes, poems and epigraphs, Russian typography, and a generated cover.
+// Used by the az.lib.ru catalog and the 📥 button of the built-in browser.
 
 import { httpGet } from './opds';
 import { drawCover } from './coverArt';
 
-export type WebBookSite = 'azlib' | 'wikisource';
+export type WebBookSite = 'azlib';
 
 export function webBookSite(url: string): WebBookSite | null {
   try {
     const host = new URL(url).hostname.toLowerCase();
     if (host === 'az.lib.ru' || host.endsWith('.az.lib.ru')) return 'azlib';
-    if (/(^|\.)wikisource\.org$/.test(host)) return 'wikisource';
   } catch {}
   return null;
 }
@@ -206,7 +205,6 @@ function poemXml(el: Element, ctx: Ctx): string {
   return '<poem>' + stanzas.map(s => '<stanza>' + s.map(v => `<v>${v.replace(/^— /, '— ')}</v>`).join('') + '</stanza>').join('') + '</poem>';
 }
 
-const TOC_MARK = '\u0000toc';
 
 function isCentered(el: Element): boolean {
   for (let e: Element | null = el, i = 0; e && i < 4; e = e.parentElement, i++) {
@@ -309,11 +307,6 @@ function walk(root: Element, ctx: Ctx, events: Event[]): void {
       for (const b of paragraphs(lines)) events.push({ kind: 'block', xml: b });
       return;
     }
-    if (tag === 'CR-TOC') {
-      flush();
-      events.push({ kind: 'block', xml: TOC_MARK });
-      return;
-    }
     if (BLOCK_TAGS.has(tag)) {
       flush();
       // A centered line such as <center>II</center> is a chapter title
@@ -378,16 +371,12 @@ function buildSections(events: Event[], skipTitles: string[] = []): Section[] {
   return out.filter(hasContent);
 }
 
-const hasContent = (s: Section): boolean => {
-  s.blocks = s.blocks.filter(b => b !== TOC_MARK);
-  return s.blocks.length > 0 || s.children.some(hasContent);
-};
+const hasContent = (s: Section): boolean => s.blocks.length > 0 || s.children.some(hasContent);
 
 // ---------- Fetching ----------
 
 export async function fetchHtml(url: string): Promise<string> {
-  const wiki = /wikisource\.org/i.test(url) ? { 'Api-User-Agent': 'CoolRead/1.93 (Android e-book reader)', 'User-Agent': 'CoolRead/1.93 (Android e-book reader)' } : {};
-  const res = await httpGet(url, undefined, true, { Accept: 'text/html,*/*;q=0.8', ...wiki }, { timeoutMs: 60000, sameProtocol: true });
+  const res = await httpGet(url, undefined, true, { Accept: 'text/html,*/*;q=0.8' }, { timeoutMs: 60000, sameProtocol: true });
   if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.blob!.arrayBuffer());
   const head = new TextDecoder('latin1').decode(bytes.slice(0, 2048)).toLowerCase();
@@ -507,189 +496,6 @@ function extractTrailingNotes(content: Element, ctx: Ctx, notes: string[], noteI
   headTop.remove();
 }
 
-// ---------- Wikisource ----------
-
-const WS_SKIP_CLASSES = ['ws-noexport', 'headertemplate', 'navbox', 'licensetemplate', 'mw-editsection', 'printfooter', 'catlinks', 'noprint', 'metadata', 'mw-cite-backlink', 'references', 'reflist', 'mw-references-wrap', 'toc', 'mw-empty-elt', 'searchaux', 'ws-pagenum', 'pagenum', 'mw-kartographer-maplink'];
-
-function wsContent(doc: Document): Element | null {
-  return doc.querySelector('#mw-content-text .mw-parser-output') || doc.querySelector('.mw-parser-output');
-}
-
-function wsMeta(doc: Document) {
-  const title = (doc.getElementById('ws-title')?.textContent || doc.querySelector('h1')?.textContent || '').replace(/\s+/g, ' ').trim();
-  const subtitle = (doc.getElementById('ws-subtitle')?.textContent || '').replace(/\s+/g, ' ').trim();
-  const author = (doc.getElementById('ws-author')?.textContent || '').replace(/^\s*\(?\s*автор\s+/i, '').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
-  const translator = (doc.getElementById('ws-translator')?.textContent || '').replace(/^\s*(пер\.|перевод(чик)?)\s*/i, '').replace(/\s+/g, ' ').trim();
-  const date = (doc.getElementById('ws-created')?.textContent || doc.getElementById('ws-published')?.textContent || '').replace(/\[\d+\]/g, '').trim();
-  return { title, subtitle, author, translator, date };
-}
-
-function wsContext(content: Element, notes: string[]): Ctx {
-  // References at the bottom: <li id="cite_note-1"> ... <span class="reference-text">
-  const noteNum = new Map<string, number>();
-  const ctxBase: Ctx = {
-    skip: el => {
-      const tag = el.tagName.toUpperCase();
-      if (['SCRIPT', 'STYLE', 'LINK', 'META', 'IMG', 'FIGURE', 'NOSCRIPT'].includes(tag)) return true;
-      const cls = el.getAttribute('class') || '';
-      if (WS_SKIP_CLASSES.some(c => cls.split(/\s+/).includes(c))) return true;
-      if (el.id === 'headertemplate' || el.id === 'extra_nav' || el.id === 'sub_nav') return true;
-      if (tag === 'TABLE' && /header/.test(cls)) return true;
-      if ((el.getAttribute('style') || '').replace(/\s/g, '').includes('display:none')) return true;
-      return false;
-    },
-    headingLevel: el => {
-      const m = el.tagName.match(/^H([1-6])$/i);
-      if (m) return Number(m[1]);
-      if (el.getAttribute('role') === 'heading') return Number(el.getAttribute('aria-level') || 3);
-      if (el.classList.contains('mw-heading')) {
-        const h = el.querySelector('h1,h2,h3,h4,h5,h6');
-        return h ? Number(h.tagName[1]) : 3;
-      }
-      return 0;
-    },
-    noteRef: () => null,
-  };
-  content.querySelectorAll('ol.references > li[id]').forEach(li => {
-    const textEl = li.querySelector('.reference-text') || li;
-    const n = notes.length + 1;
-    noteNum.set(li.id, n);
-    notes.push(splitLines(inlineOf(textEl, ctxBase)).join(' '));
-  });
-  return {
-    ...ctxBase,
-    noteRef: el => {
-      if (!el.classList.contains('reference') && el.tagName.toUpperCase() !== 'SUP') return null;
-      const a = el.matches('a') ? el : el.querySelector('a[href^="#cite_note"]');
-      const href = a?.getAttribute('href') || '';
-      if (!href.startsWith('#cite_note')) return null;
-      return noteNum.get(decodeURIComponent(href.slice(1))) ?? noteNum.get(href.slice(1)) ?? null;
-    },
-  };
-}
-
-/** Subpages of this page linked from its text (a table of contents), in order. */
-function wsSubpages(content: Element, pageUrl: string, ctx: Ctx): { url: string; text: string }[] {
-  const base = new URL(pageUrl);
-  const basePath = decodeURIComponent(base.pathname).replace(/\/+$/, '');
-  const seen = new Set<string>();
-  const out: { url: string; text: string }[] = [];
-  content.querySelectorAll('a[href]').forEach(a => {
-    let el: Element | null = a;
-    while (el && el !== content) { if (ctx.skip(el)) return; el = el.parentElement; }
-    let u: URL;
-    try { u = new URL(a.getAttribute('href')!, base); } catch { return; }
-    if (u.host !== base.host) return;
-    const path = decodeURIComponent(u.pathname);
-    if (!path.startsWith(basePath + '/') || u.search.includes('action=')) return;
-    u.hash = '';
-    const key = u.toString();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({ url: key, text: (a.textContent || '').replace(/\s+/g, ' ').trim() });
-  });
-  return out;
-}
-
-/** Removes table-of-contents lists that only link to subpages. */
-function wsRemoveToc(content: Element, subUrls: Set<string>, pageUrl: string, ctx: Ctx) {
-  const base = new URL(pageUrl);
-  // Find every contents line first: removing them one by one would change the sizes compared below
-  const targets: Element[] = [];
-  content.querySelectorAll('a[href]').forEach(a => {
-    for (let p: Element | null = a; p && p !== content; p = p.parentElement) if (ctx.skip(p)) return;
-    let u: URL;
-    try { u = new URL(a.getAttribute('href')!, base); } catch { return; }
-    u.hash = '';
-    if (!subUrls.has(u.toString())) return;
-    // Climb to the list item or line holding just this link
-    let el: Element = a;
-    while (el.parentElement && el.parentElement !== content && (el.parentElement.textContent || '').trim().length <= (a.textContent || '').trim().length + 12) el = el.parentElement;
-    if (!targets.includes(el)) targets.push(el);
-  });
-  // Remember where the contents stood: text after it (commentary) goes after the chapters
-  if (targets[0]) targets[0].parentNode?.insertBefore(content.ownerDocument.createElement('cr-toc'), targets[0]);
-  targets.forEach(el => el.remove());
-  content.querySelectorAll('ul,ol,dl,table').forEach(l => {
-    if ((l.textContent || '').trim()) return;
-    const mark = l.querySelector('cr-toc');
-    if (mark) l.replaceWith(mark);
-    else l.remove();
-  });
-}
-
-export interface ImportProgress { (done: number, total: number): void }
-
-export async function importWikisource(url: string, html: string, fetchPage: (u: string) => Promise<string>, onProgress?: ImportProgress): Promise<WebBook> {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const meta = wsMeta(doc);
-  if (/^Список редакций/i.test(meta.title)) {
-    throw new Error('This page lists several editions. Open one of them and tap 📥 again.');
-  }
-  const content = wsContent(doc);
-  if (!content) throw new Error('No text on this page');
-  const notes: string[] = [];
-  const ctx = wsContext(content, notes);
-  const subs = wsSubpages(content, url, ctx);
-  const events: Event[] = [];
-  const bookTitle = meta.title.replace(/^Список редакций:\s*/i, '') || decodeURIComponent(new URL(url).pathname.split('/').pop() || '').replace(/_/g, ' ');
-
-  if (subs.length >= 2) {
-    wsRemoveToc(content, new Set(subs.map(s => s.url)), url, ctx);
-    const mainEvents: Event[] = [];
-    walk(content, ctx, mainEvents); // preface and epigraph of the whole work, commentary after the contents
-    mainEvents.forEach(e => { if (e.kind === 'heading') e.level += 10; });
-    const cut = mainEvents.findIndex(e => e.kind === 'block' && e.xml === TOC_MARK);
-    const before = cut >= 0 ? mainEvents.slice(0, cut) : mainEvents;
-    const afterToc = cut >= 0 ? mainEvents.slice(cut + 1) : [];
-    events.push(...before);
-    let done = 0;
-    for (const sub of subs.slice(0, 400)) {
-      onProgress?.(done, subs.length);
-      let subHtml: string;
-      try { subHtml = await fetchPage(sub.url); } catch (e) { throw new Error(`Could not load “${sub.text}”: ${(e as Error).message}`); }
-      const sdoc = new DOMParser().parseFromString(subHtml, 'text/html');
-      const scontent = wsContent(sdoc);
-      if (!scontent) continue;
-      const sctx = wsContext(scontent, notes);
-      const sevents: Event[] = [];
-      walk(scontent, sctx, sevents);
-      // Each subpage is a chapter (level 1); its own headings go one level deeper.
-      // A page that starts with a heading already names the chapter, otherwise the contents do.
-      const firstReal = sevents.find(e => e.kind !== 'epigraph');
-      sevents.forEach(e => { if (e.kind === 'heading') e.level += 10; });
-      if (firstReal && firstReal.kind === 'heading') firstReal.level = 1;
-      else {
-        const subTitle = wsMeta(sdoc).subtitle || sub.text || decodeURIComponent(sub.url.split('/').pop() || '').replace(/_/g, ' ');
-        events.push({ kind: 'heading', level: 1, lines: [xmlEscape(typoText(subTitle))] });
-      }
-      events.push(...sevents);
-      done++;
-      await new Promise(r => setTimeout(r, 150)); // be gentle with the site
-    }
-    if (afterToc.some(e => e.kind !== 'heading')) {
-      if (afterToc[0]?.kind !== 'heading') events.push({ kind: 'heading', level: 1, lines: ['Комментарии'] });
-      else (afterToc[0] as any).level = 1;
-      events.push(...afterToc);
-    }
-    onProgress?.(subs.length, subs.length);
-  } else {
-    walk(content, ctx, events);
-  }
-
-  return {
-    title: bookTitle,
-    authors: meta.author ? meta.author.split(/,| и /).map(a => parsePerson(a.trim(), false)) : [],
-    translators: meta.translator ? [parsePerson(meta.translator, false)] : [],
-    annotation: [],
-    date: meta.date || undefined,
-    lang: 'ru',
-    sourceUrl: url,
-    sections: buildSections(events, [bookTitle, meta.author]),
-    notes,
-  };
-}
-
 // ---------- FB2 writer ----------
 
 function personXml(tag: string, p: Person): string {
@@ -760,11 +566,10 @@ export { drawCover };
 
 // ---------- Entry point ----------
 
-export async function webPageToFb2(url: string, onProgress?: ImportProgress): Promise<File> {
-  const site = webBookSite(url);
-  if (!site) throw new Error('This page is not from az.lib.ru or Wikisource');
+export async function webPageToFb2(url: string): Promise<File> {
+  if (!webBookSite(url)) throw new Error('This page is not from az.lib.ru');
   const html = await fetchHtml(url);
-  const book = site === 'azlib' ? parseAzLib(html, url) : await importWikisource(url, html, fetchHtml, onProgress);
+  const book = parseAzLib(html, url);
   if (!book.sections.length) throw new Error('No book text found on this page');
   const author = book.authors.map(personName).join(', ');
   const cover = await drawCover(book.title, author);

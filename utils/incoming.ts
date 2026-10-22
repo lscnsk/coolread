@@ -42,13 +42,13 @@ const MIME_EXT: Record<string, string> = {
 async function toImportable(f: IncomingFile, notice: IncomingNotice): Promise<File[]> {
   const blob = await (await fetch(Capacitor.convertFileSrc(f.path))).blob();
   let name = f.name;
-  // A page of az.lib.ru or Wikisource saved with 📥 in the built-in browser: build the fb2 from it
+  // A page of az.lib.ru saved with 📥 in the built-in browser: build the fb2 from it
   if (/\.coolread-page$/i.test(name)) {
     const url = (await blob.text()).trim();
     const { webPageToFb2 } = await import('./webBook');
     notice('📥 Building the book…', true);
     try {
-      return [await webPageToFb2(url, (done, total) => notice(`📥 Building the book… ${done}/${total}`, true))];
+      return [await webPageToFb2(url)];
     } catch (e) {
       notice(`📥 ${(e as Error).message || 'Could not build the book'}`);
       throw e;

@@ -61,7 +61,7 @@ const PRESET_SOURCES: OpdsSource[] = String(import.meta.env.VITE_OPDS_PRESET || 
   .map(s => s.trim())
   .flatMap(name => (name === 'flibusta' ? [FLIBUSTA_SOURCE] : name === 'mangadex' ? [MANGADEX_SOURCE] : []));
 
-// az.lib.ru and Wikisource searched like OPDS catalogs; their books are built into fb2 (utils/webCatalog.ts).
+// az.lib.ru searched like an OPDS catalog; its books are built into fb2 (utils/webCatalog.ts).
 // Added once; the user can delete them.
 const BOOK_SITES: OpdsSource[] = [
   { id: 'web_preset_azlib', title: 'az.lib.ru', url: 'coolread-web:azlib' },
@@ -90,7 +90,7 @@ export async function loadOpdsSources(): Promise<OpdsSource[]> {
     if (raw === null || raw === undefined) return await addBookSitesOnce(PRESET_SOURCES);
     // Older builds named the preset Flibusta in Russian
     const parsed = JSON.parse(raw) as OpdsSource[];
-    // Wikisource search is switched off for now: drop the catalog an earlier 1.93 build added
+    // Wikisource was removed: drop the catalog an earlier 1.93 build added
     const withoutWiki = parsed.filter(s => s.url !== 'coolread-web:wikisource');
     if (withoutWiki.length !== parsed.length) await saveOpdsSources(withoutWiki);
     const sources = withoutWiki.map(s => (s.id === FLIBUSTA_SOURCE.id ? { ...s, title: FLIBUSTA_SOURCE.title } : s));
@@ -294,7 +294,7 @@ export function parseOpdsFeed(xml: string, url: string): OpdsFeed {
 }
 
 export async function fetchOpdsFeed(url: string, source?: OpdsSource): Promise<OpdsFeed> {
-  // az.lib.ru and Wikisource: catalogs built from the sites' own pages
+  // az.lib.ru: a catalog built from the site's own pages
   if (url.startsWith('coolread-web:')) return (await import('./webCatalog')).fetchWebCatalogFeed(url);
   const res = await httpGet(url, source, false);
   if (res.status === 401 || res.status === 403) throw new Error('auth');
