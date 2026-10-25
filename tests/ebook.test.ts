@@ -44,3 +44,12 @@ describe('parseEpub', () => {
     expect(all.indexOf('Текст Два')).toBeLessThan(all.indexOf('Текст Один'));
   });
 });
+
+describe('parseFb2 with control characters', () => {
+  it('keeps the text after a stray control character', async () => {
+    const broken = fb2.replace('Первый абзац.', 'Первый\u0016 абзац.');
+    const book = await parseFb2(new Blob([broken]), 'b1');
+    const text = (book.chapters || []).map(c => c.content || '').join(' ');
+    expect(text).toContain('Второй абзац.');
+  });
+});

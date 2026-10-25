@@ -81,6 +81,10 @@ interface TocItem {
     level: number;
 }
 
+// Control characters are not allowed in XML: one stray byte makes the parser stop there,
+// and the book would end in the middle (seen in texts from old Russian libraries)
+const cleanXml = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+
 const parseNCX = (xmlString: string, ncxFullPath: string): TocItem[] => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(xmlString, "text/xml");
@@ -150,7 +154,7 @@ const parseNavHtml = (htmlString: string, navFullPath: string): TocItem[] => {
 const MAX_FB2_PAGE_LEVEL = 1;
 
 export const parseFb2 = async (file: Blob, bookId: string): Promise<Partial<Book>> => {
-  const text = await file.text();
+  const text = cleanXml(await file.text());
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, "text/xml");
   
@@ -560,7 +564,7 @@ export const parseEpub = async (file: Blob, bookId: string): Promise<Partial<Boo
         if (parsedDocsCache.has(path)) return parsedDocsCache.get(path)!;
         const fileData = await zip.file(path)?.async("string");
         if (!fileData) return null;
-        const doc = parser.parseFromString(fileData, "application/xhtml+xml");
+        const doc = parser.parseFromString(cleanXml(fileData), "application/xhtml+xml");
         parsedDocsCache.set(path, doc);
         return doc;
     };

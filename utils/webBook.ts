@@ -550,7 +550,9 @@ export function buildFb2(book: WebBook, cover?: { base64: string; type: string }
     ? `<body name="notes"><title><p>Примечания</p></title>${book.notes.map((n, i) => `<section id="n${i + 1}"><title><p>${i + 1}</p></title><p>${n || '…'}</p></section>`).join('')}</body>`
     : '';
   const binary = cover ? `<binary id="cover.jpg" content-type="${cover.type}">${cover.base64}</binary>` : '';
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink"><description><title-info>${titleInfo}</title-info><document-info>${docInfo}</document-info></description>${body}${notes}${binary}</FictionBook>`;
+  // Control characters (az.lib.ru texts have some) would break the XML from that point on
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink"><description><title-info>${titleInfo}</title-info><document-info>${docInfo}</document-info></description>${body}${notes}${binary}</FictionBook>`;
+  return xml.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\uFFFE\uFFFF]/g, '');
 }
 
 function hash(s: string): string {
