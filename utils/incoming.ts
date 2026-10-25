@@ -83,7 +83,20 @@ async function toImportable(f: IncomingFile, notice: IncomingNotice): Promise<Fi
  * Events received before the listener exists are kept by the native side.
  */
 export function listenForIncomingFiles(onFiles: (files: File[]) => Promise<void> | void, notice: IncomingNotice): () => void {
-  if (!Capacitor.isNativePlatform()) return () => {};
+  if (!Capacitor.isNativePlatform()) {
+    // Installed web app on a computer: files opened with CoolRead ("Open with") arrive here
+    const lq = (window as any).launchQueue;
+    let active = true;
+    lq?.setConsumer?.(async (params: { files?: { getFile(): Promise<File> }[] }) => {
+      if (!active || !params.files?.length) return;
+      const files: File[] = [];
+      for (const h of params.files) {
+        try { files.push(await h.getFile()); } catch {}
+      }
+      if (files.length) await onFiles(files);
+    });
+    return () => { active = false; };
+  }
   let handle: PluginListenerHandle | null = null;
   let cancelled = false;
   IncomingFiles.addListener('filesReceived', async ({ files }) => {

@@ -101,12 +101,28 @@ function savePrefs() {
 
 let prefsLoaded: Promise<void> | null = null;
 
+// Web version: the voices of the computer or phone (Web Speech API). Russian ones first.
+const speech: SpeechSynthesis | null = !isNative && typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
+const SYS = 'sys:';
+const isSystemVoice = () => !!speech && (state.voice || '').startsWith(SYS);
+
+function webVoices(): Voice[] {
+  const list = speech?.getVoices() || [];
+  if (!list.length) return [{ id: 'web', name: 'silent (no voices in this browser)', lang: '', builtIn: true }];
+  const ru = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith('ru');
+  return [...list]
+    .sort((a, b) => Number(ru(b)) - Number(ru(a)) || Number(b.localService) - Number(a.localService) || a.name.localeCompare(b.name))
+    .map(v => ({ id: SYS + v.voiceURI, name: v.name, lang: v.lang, builtIn: ru(v) }));
+}
+// Browsers load their voice list a moment after the page
+speech?.addEventListener?.('voiceschanged', () => { refreshVoices().catch(() => {}); });
+
 export async function refreshVoices(): Promise<Voice[]> {
   if (!prefsLoaded) prefsLoaded = loadPrefs();
   await prefsLoaded;
   let voices: Voice[] = [];
   try {
-    voices = isNative ? (await Native.listVoices()).voices : [{ id: 'web', name: 'silent (web preview)', lang: '', builtIn: true }];
+    voices = isNative ? (await Native.listVoices()).voices : webVoices();
   } catch {}
   const voice = voices.some(v => v.id === state.voice) ? state.voice : (voices.find(v => v.builtIn) || voices[0])?.id || null;
   set({ voices, voice });
@@ -411,7 +427,50 @@ function tick() {
   raf = requestAnimationFrame(tick);
 }
 
+// Keeps the utterance alive: Chrome forgets its events when it is garbage collected
+let utterance: SpeechSynthesisUtterance | null = null;
+
+/** Web version: says sentence i with a system voice and follows its words. */
+function speakSentence(i: number) {
+  const myEpoch = epoch;
+  current = i;
+  lastWord = -1;
+  const s = sentences[i];
+  const u = new SpeechSynthesisUtterance(s.text);
+  const v = speech!.getVoices().find(x => SYS + x.voiceURI === state.voice);
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = Math.max(0.5, Math.min(state.speed, 4));
+  u.onstart = () => {
+    if (myEpoch !== epoch) return;
+    set({ loading: false });
+    lastWord = 0;
+    showWord(i, 0);
+  };
+  u.onboundary = e => {
+    if (myEpoch !== epoch || (e.name && e.name !== 'word')) return;
+    const tok = s.text.slice(0, e.charIndex).split(' ').length - 1;
+    let j = 0;
+    for (let k = 0; k < s.words.length; k++) if (s.words[k].tok <= tok) j = k;
+    if (j !== lastWord) { lastWord = j; showWord(i, j); }
+  };
+  u.onend = () => { if (myEpoch === epoch) sentenceEnded(); };
+  u.onerror = e => {
+    if (myEpoch !== epoch || e.error === 'interrupted' || e.error === 'canceled') return;
+    set({ playing: false, loading: false, error: 'Voice error' });
+  };
+  utterance = u;
+  set({ loading: true });
+  speech!.speak(u);
+}
+
+/** Silences whatever is speaking (audio or system voice). */
+function hush() {
+  audio.pause?.();
+  if (speech) speech.cancel();
+}
+
 async function playSentence(i: number) {
+  if (isSystemVoice()) return speakSentence(i);
   const myEpoch = epoch;
   current = i;
   lastWord = -1;
@@ -440,7 +499,7 @@ async function playSentence(i: number) {
   if (!raf) raf = requestAnimationFrame(tick);
 }
 
-audio.onended = () => {
+function sentenceEnded() {
   if (!state.playing) return;
   if (current + 1 < sentences.length) {
     playSentence(current + 1);
@@ -465,13 +524,14 @@ audio.onended = () => {
         if (myEpoch !== epoch) return;
         collect(nav!.root()!);
         if (sentences.length) playSentence(0);
-        else audio.onended?.(new Event('ended'));
+        else sentenceEnded();
       }, 300);
     } else if (tries++ < 50) setTimeout(wait, 200);
     else stop();
   };
   setTimeout(wait, 200);
-};
+}
+audio.onended = () => sentenceEnded();
 
 // ---- Native reading ----
 
@@ -623,6 +683,12 @@ export async function play() {
   if (isNative) return playNative(root);
   set({ playing: true, error: null });
   const sameText = builtFor === root && builtText === (root.textContent || '');
+  if (isSystemVoice() && sameText && current >= 0 && isOnScreen(current)) {
+    // System voices cannot be resumed mid-sentence everywhere: say the paused sentence again
+    epoch++;
+    speakSentence(current);
+    return;
+  }
   if (sameText && current >= 0 && audio.src && audio.paused && isOnScreen(current)) {
     audio.playbackRate = state.speed;
     audio.play().catch(() => set({ playing: false }));
@@ -642,7 +708,10 @@ export async function play() {
 export function pause() {
   set({ playing: false, loading: false });
   if (isNative) Native.pauseSpeech().catch(() => {});
-  else audio.pause?.();
+  else {
+    epoch++;
+    hush();
+  }
 }
 
 /** Skips a sentence forward or back. */
@@ -661,14 +730,14 @@ export function skip(delta: number) {
   }
   epoch++;
   cache.clear();
-  audio.pause();
+  hush();
   playSentence(next);
 }
 
 function stopAudio() {
   epoch++;
   cache.clear();
-  audio.pause?.();
+  hush();
   audio.removeAttribute?.('src');
   current = -1;
   if (raf) cancelAnimationFrame(raf);

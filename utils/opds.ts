@@ -48,6 +48,9 @@ export interface OpdsFeed {
 }
 
 const STORAGE_KEY = 'cool_read_opds_sources';
+// Web version only: address of the proxy that fetches other sites for the browser, e.g.
+// "https://coolread-proxy.name.workers.dev/?url=" (set at build time, see web-pwa/README.md)
+const CORS_PROXY: string = String(import.meta.env.VITE_CORS_PROXY || '');
 const isNative = Capacitor.isNativePlatform();
 
 export const MANGADEX_SOURCE: OpdsSource = { id: 'mangadex', title: 'mangadex', url: 'https://mangadex.org', kind: 'mangadex' };
@@ -142,9 +145,11 @@ export async function httpGet(
 ): Promise<HttpResult> {
   const reasons: string[] = [];
   const alt = opts.sameProtocol ? null : url.startsWith('https://') ? 'http://' + url.slice(8) : url.startsWith('http://') ? 'https://' + url.slice(7) : null;
+  // In the web version other sites can only be reached through the app's proxy (see web-pwa/cors-proxy)
+  const viaProxy = !isNative && CORS_PROXY && /^https?:\/\//.test(url) ? CORS_PROXY + encodeURIComponent(url) : null;
   const attempts: [string, boolean][] = isNative
     ? [[url, true], [url, false], ...(alt ? [[alt, true] as [string, boolean]] : [])]
-    : [[url, false]];
+    : [...(viaProxy ? [[viaProxy, false] as [string, boolean]] : []), [url, false]];
   for (const [u, native] of attempts) {
     try {
       // Hard limit per attempt: a blocked site can hang the connection

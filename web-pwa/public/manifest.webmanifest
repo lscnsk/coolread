@@ -1,0 +1,32 @@
+{
+  "name": "CoolRead",
+  "short_name": "CoolRead",
+  "description": "Читалка и плеер аудиокниг: FB2, EPUB, PDF, CBZ/CBR, MP3/M4B",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#23211f",
+  "theme_color": "#23211f",
+  "lang": "ru",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/x-fictionbook+xml": [".fb2"],
+        "application/epub+zip": [".epub"],
+        "application/pdf": [".pdf"],
+        "application/vnd.comicbook+zip": [".cbz"],
+        "application/vnd.comicbook-rar": [".cbr"],
+        "audio/mpeg": [".mp3"],
+        "audio/mp4": [".m4b", ".m4a"]
+      }
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" }
+}
