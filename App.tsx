@@ -499,6 +499,53 @@ function App() {
     }
   };
 
+  // A link from the showcase site (lscnsk.github.io/library): "#book=jk" opens that lscnsk book
+  // (downloading it first if it is not in the library), "#url=https://…fb2" imports any book file.
+  const linkHandlersRef = useRef({ handleReadCatalogBook, handleDownloadCatalogBook, books, catalogBooks });
+  linkHandlersRef.current = { handleReadCatalogBook, handleDownloadCatalogBook, books, catalogBooks };
+  useEffect(() => {
+    if (!isLibraryReady) return;
+    const openFromHash = async () => {
+      const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const id = params.get('book');
+      const url = params.get('url');
+      if (!id && !url) return;
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      const h = linkHandlersRef.current;
+      try {
+        if (id) {
+          let cat = h.catalogBooks.find(b => b.id === id);
+          if (!cat) {
+            const { books: fresh } = await syncCatalogFromGitHub();
+            setCatalogBooks(fresh);
+            cat = fresh.find(b => b.id === id);
+          }
+          if (!cat) { setIncomingNotice({ text: 'Book not found in lscnsk', sticky: false }); return; }
+          const title = cat.title.toLowerCase().trim();
+          const have = h.books.some(b => (b.title || '').toLowerCase().trim() === title);
+          if (have) h.handleReadCatalogBook(cat);
+          else await h.handleDownloadCatalogBook(cat);
+        } else if (url && /^https:\/\//i.test(url)) {
+          setIncomingNotice({ text: '📥 Downloading…', sticky: true });
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'book.fb2');
+          setIncomingNotice(null);
+          closeAllSidebars();
+          setIsCatalogOpen(false);
+          await handleExternalFilePickedRef.current([new File([blob], name, { lastModified: Date.now() })]);
+        }
+      } catch (e) {
+        setIncomingNotice({ text: `Could not open the book: ${(e as Error).message || 'no connection'}`, sticky: false });
+      }
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLibraryReady]);
+
   const handleRefreshCatalog = async () => {
     setIsCatalogSyncing(true);
     try {
