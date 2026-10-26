@@ -53,3 +53,13 @@ describe('parseFb2 with control characters', () => {
     expect(text).toContain('Второй абзац.');
   });
 });
+
+describe('fb2 metadata', () => {
+  it('keeps the series when <sequence> comes after the cover', async () => {
+    const { extractFb2Metadata } = await import('../utils/ebook');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink"><description><title-info><author><first-name>Джозеф</first-name><last-name>Конрад</last-name></author><book-title>Король моря</book-title><coverpage><image l:href="#image1"/></coverpage><lang>ru</lang><sequence name="Далекая Республика"/></title-info></description><body><section><p>x</p></section></body></FictionBook>`;
+    const meta = await extractFb2Metadata(new Blob([xml]));
+    expect(meta.title).toBe('Король моря');
+    expect(meta.series).toBe('Далекая Республика');
+  });
+});

@@ -690,7 +690,10 @@ export const extractFb2Metadata = async (file: Blob): Promise<{ title: string; a
     try {
         const text = await file.text();
         const descMatch = text.match(/<description>[\s\S]*?<\/description>/i);
-        const descText = descMatch ? descMatch[0] : text.slice(0, 50000);
+        // The description alone loses the root's namespaces: without them "l:href" in <coverpage>
+        // is an XML error and everything after it (often <sequence>) is dropped
+        const descText = (descMatch ? descMatch[0] : text.slice(0, 50000))
+          .replace(/^<description\b/i, '<description xmlns:l="http://www.w3.org/1999/xlink" xmlns:xlink="http://www.w3.org/1999/xlink"');
         
         const parser = new DOMParser();
         const doc = parser.parseFromString(descText, "text/xml");
