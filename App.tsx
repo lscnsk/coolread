@@ -34,7 +34,7 @@ import { openSite } from './utils/webBrowser';
 import { OpdsSource, loadOpdsSources, saveOpdsSources } from './utils/opds';
 import { listenForIncomingFiles } from './utils/incoming';
 import { CatalogBook, CatalogSeries, CATALOG_SERIES, sortBooksChronologically } from './data/catalogData';
-import { getStoredCatalogBooks, syncCatalogFromGitHub, downloadCatalogBookFile, buildCatalogSeriesFromBooks } from './utils/catalogSync';
+import { getStoredCatalogBooks, syncCatalogFromGitHub, lastCatalogSyncTime, downloadCatalogBookFile, buildCatalogSeriesFromBooks } from './utils/catalogSync';
 
 import { parseM4AChapters } from './utils/mp4chapters';
 
@@ -511,8 +511,14 @@ function App() {
     }
   };
 
-  // No automatic catalog check on startup: the app goes online only when the
-  // user refreshes the catalog or downloads a book from it.
+  // No check on startup. When the lscnsk catalog is opened and the list is more than an
+  // hour old, it is refreshed quietly (one small catalog.json), so new books show up by themselves.
+  useEffect(() => {
+    if (!isCatalogOpen || activeOpds || isCatalogSyncing) return;
+    if (Date.now() - lastCatalogSyncTime() < 60 * 60 * 1000) return;
+    syncCatalogFromGitHub().then(({ books }) => setCatalogBooks(books)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCatalogOpen, activeOpds]);
 
 
   const lastBumpedTimeRef = useRef<number>(0);

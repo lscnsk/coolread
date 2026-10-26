@@ -83,6 +83,58 @@ export function buildCatalogSeriesFromBooks(books: CatalogBook[]): CatalogSeries
   }));
 }
 
+const RAW = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main`;
+const CDN = `https://cdn.jsdelivr.net/gh/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}@main`;
+
+/** When the catalog was last refreshed (ms), 0 if never. */
+export function lastCatalogSyncTime(): number {
+  try { return Number(localStorage.getItem(CACHE_TIME_KEY) || 0); } catch { return 0; }
+}
+
+type CatalogJsonBook = {
+  id: string; filename: string; title: string; author: string; series?: string; seriesNumber?: number | string;
+  year?: string; description?: string; cover?: string; size?: number; pageCount?: number;
+};
+
+/**
+ * catalog.json in the library repository lists every book; a GitHub Action rebuilds it
+ * whenever a book is uploaded. One small file instead of the GitHub API (60 requests an hour).
+ */
+async function fetchCatalogJson(signal: AbortSignal): Promise<CatalogBook[] | null> {
+  for (const url of [`${RAW}/catalog.json?t=${Date.now()}`, `${CDN}/catalog.json`]) {
+    try {
+      const res = await fetch(url, { signal, cache: 'no-store' });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data?.books)) continue;
+      const bundled = new Map(CATALOG_BOOKS.map(b => [b.filename.toLowerCase(), b]));
+      return (data.books as CatalogJsonBook[]).filter(b => b && b.filename && b.title).map(b => {
+        const old = bundled.get(b.filename.toLowerCase());
+        return {
+          id: b.id,
+          filename: b.filename,
+          title: b.title,
+          author: b.author || 'Неизвестный автор',
+          series: b.series || undefined,
+          year: b.year || undefined,
+          description: b.description || undefined,
+          coverBg: old?.coverBg || 'from-[#2a2421] to-[#171412]',
+          coverTextColor: old?.coverTextColor || '#fffff0',
+          coverUrl: b.cover ? `${RAW}/${b.cover}` : undefined,
+          downloadUrl: `${RAW}/${b.filename}`,
+          fallbackUrl: `${CDN}/${b.filename}`,
+          fileSize: b.size ? formatBytes(b.size) : 'FB2',
+          format: 'fb2',
+          pageCount: b.pageCount || undefined,
+        };
+      });
+    } catch {
+      if (signal.aborted) return null;
+    }
+  }
+  return null;
+}
+
 /**
  * Syncs the catalog metadata from GitHub without downloading full file contents.
  * Uses HTTP Range requests if probing new files to only fetch header metadata (< 4KB).
@@ -96,6 +148,17 @@ export async function syncCatalogFromGitHub(): Promise<{ books: CatalogBook[]; s
     controller = new AbortController();
     timeoutId = setTimeout(() => controller?.abort(), 6000); // 6s timeout
 
+    const fromJson = await fetchCatalogJson(controller.signal);
+    if (fromJson && fromJson.length) {
+      const sorted = sortBooksChronologically(fromJson);
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(sorted));
+        localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+      } catch { /* storage full: still show the fresh list */ }
+      return { books: sorted, series: buildCatalogSeriesFromBooks(sorted) };
+    }
+
+    // No catalog.json yet: read the folder listing as before
     let items: any[] | null = null;
 
     // 1. Try primary GitHub contents API
