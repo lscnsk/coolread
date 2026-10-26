@@ -19,6 +19,8 @@ export interface CatalogBook {
   fileSize: string;
   format?: string;
   pageCount?: number;
+  /** A short label over the cover, e.g. "На вычитке" (badges.json in lscnsk_library) */
+  badge?: string;
 }
 
 export interface CatalogSeries {
@@ -114,6 +116,7 @@ export const CATALOG_SERIES: CatalogSeries[] = [
 export const CATALOG_BOOKS: CatalogBook[] = [
   {
     id: "fr",
+    badge: 'На вычитке',
     filename: "fr.fb2",
     title: "По эту сторону рая",
     author: "Фрэнсис Фицджеральд",
@@ -131,6 +134,7 @@ export const CATALOG_BOOKS: CatalogBook[] = [
   },
   {
     id: "jk",
+    badge: 'На вычитке',
     filename: "jk.fb2",
     title: "Король моря",
     author: "Джозеф Конрад",
@@ -182,6 +186,7 @@ export const CATALOG_BOOKS: CatalogBook[] = [
   },
   {
     id: "ln",
+    badge: 'На вычитке',
     filename: "ln.fb2",
     title: "Мораль и наука о нравах",
     author: "Люсьен Леви-Брюль",

@@ -94,7 +94,7 @@ export function lastCatalogSyncTime(): number {
 
 type CatalogJsonBook = {
   id: string; filename: string; title: string; author: string; series?: string; seriesNumber?: number | string;
-  year?: string; description?: string; cover?: string; size?: number; pageCount?: number;
+  year?: string; description?: string; cover?: string; size?: number; pageCount?: number; badge?: string;
 };
 
 /**
@@ -127,6 +127,7 @@ async function fetchCatalogJson(signal: AbortSignal): Promise<CatalogBook[] | nu
           fileSize: b.size ? formatBytes(b.size) : 'FB2',
           format: 'fb2',
           pageCount: b.pageCount || undefined,
+          badge: b.badge || undefined,
         };
       });
     } catch {

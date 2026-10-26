@@ -351,7 +351,12 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                 <div className="w-full flex flex-col items-center sm:items-start">
                   {/* Book Cover */}
                   {book.coverUrl ? (
-                    <div className="w-40 sm:w-full max-w-[210px] h-auto select-none block">
+                    <div className="relative w-40 sm:w-full max-w-[210px] h-auto select-none block">
+                      {book.badge && (
+                        <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
+                          {book.badge}
+                        </span>
+                      )}
                       <SmartCoverImage
                         src={book.coverUrl}
                         alt={book.title}
@@ -387,6 +392,11 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                         book.coverBg || 'from-[#2a2421] to-[#171412]'
                       } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group`}
                     >
+                      {book.badge && (
+                        <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
+                          {book.badge}
+                        </span>
+                      )}
                       {/* Spine highlight overlay */}
                       <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-gradient-to-r from-white/20 via-white/5 to-transparent pointer-events-none z-10" />
 
