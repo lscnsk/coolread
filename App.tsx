@@ -524,9 +524,13 @@ function App() {
           const title = cat.title.toLowerCase().trim();
           const have = h.books.some(b => (b.title || '').toLowerCase().trim() === title);
           if (have) h.handleReadCatalogBook(cat);
-          else await h.handleDownloadCatalogBook(cat);
+          else {
+            setIncomingNotice({ text: `📥 Downloading «${cat.title}»…`, sticky: true });
+            await h.handleDownloadCatalogBook(cat);
+            setIncomingNotice(null);
+          }
         } else if (url && /^https:\/\//i.test(url)) {
-          setIncomingNotice({ text: '📥 Downloading…', sticky: true });
+          setIncomingNotice({ text: '📥 Downloading the book…', sticky: true });
           const res = await fetch(url);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const blob = await res.blob();
