@@ -546,7 +546,7 @@ final class SileroTts implements AutoCloseable {
         StringBuilder sb = new StringBuilder();
         int words = 0;
         for (int i = 0; i < tokens.length; i++) {
-            String c = clean(spellOut(tokens[i]));
+            String c = clean(spellOut(RomanNumerals.say(tokens, i)));
             if (c.isEmpty()) { tokenWord[i] = -1; continue; }
             if (sb.length() > 0) sb.append(' ');
             tokenWord[i] = words;
