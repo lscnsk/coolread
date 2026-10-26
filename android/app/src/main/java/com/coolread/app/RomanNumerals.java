@@ -65,7 +65,9 @@ final class RomanNumerals {
             form = prevRaw.endsWith("а") || prevRaw.endsWith("я") ? "f" : "m";
         }
         // One letter that may be a Latin word or a mark ("I", "C"): only in a clear context
-        if (roman.length() == 1 && form == null && !alone) return tokens[i];
+        // "I. Детство": a numbered heading at the start of the line
+        boolean numbered = i == 0 && m.group(1).isEmpty() && m.group(4).matches("[.)]");
+        if (roman.length() == 1 && form == null && !alone && !numbered) return tokens[i];
 
         String words = form == null ? SileroTts.number(String.valueOf(n)) : ordinal(n, form);
         return m.group(1) + words + m.group(4);
