@@ -14,7 +14,7 @@ export interface NowPlayingInfo {
 interface NowPlayingPlugin {
   update(o: NowPlayingInfo & { playing: boolean; loading?: boolean; position?: number; duration?: number; speed?: number }): Promise<void>;
   clear(): Promise<void>;
-  addListener(event: 'action', cb: (e: { action: 'play' | 'pause' | 'back' | 'forward' | 'seek' | 'stop'; position: number }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'action', cb: (e: { action: 'play' | 'pause' | 'back' | 'forward' | 'seek' | 'stop' | 'slower' | 'faster'; position: number }) => void): Promise<PluginListenerHandle>;
 }
 
 export const isNativePlayer = Capacitor.isNativePlatform();

@@ -772,8 +772,8 @@ function App() {
   };
 
   // Player notification for audiobooks (also on the lock screen and headphones)
-  const audioActionsRef = useRef({ togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying });
-  audioActionsRef.current = { togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying };
+  const audioActionsRef = useRef({ togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate });
+  audioActionsRef.current = { togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate };
   const audioNotifiedRef = useRef(false);
   useEffect(() => {
     if (!isNativePlayer) return;
@@ -784,6 +784,11 @@ function App() {
       else if (e.action === 'back') a.seekInBook(a.currentTime - 10);
       else if (e.action === 'forward') a.seekInBook(a.currentTime + 10);
       else if (e.action === 'seek') a.seekAudio(e.position);
+      // Same steps and limits as the speed buttons of the player
+      else if (e.action === 'slower' || e.action === 'faster') {
+        const r = Math.round((a.playbackRate + (e.action === 'faster' ? 0.25 : -0.25)) * 4) / 4;
+        a.setPlaybackRate(Math.max(1, Math.min(4, r)));
+      }
     });
     return () => { h.then(x => x.remove()); };
   }, []);

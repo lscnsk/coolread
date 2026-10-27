@@ -9,4 +9,6 @@
     <string name="playback_pause">Pause</string>
     <string name="playback_back">Back</string>
     <string name="playback_forward">Forward</string>
+    <string name="playback_slower">Slower</string>
+    <string name="playback_faster">Faster</string>
 </resources>

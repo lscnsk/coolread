@@ -36,6 +36,8 @@ final class Speaker implements PlaybackService.Controller {
         void onPosition(int chapter, int index, int word);
         /** The queue is about to run out after this chapter. */
         void onNeed(int chapter);
+        /** The speed was changed from the notification. */
+        void onSpeed(float speed);
     }
 
     static final class Item {
@@ -347,7 +349,17 @@ final class Speaker implements PlaybackService.Controller {
         speed = s;
         if (session != null) applySpeed(session.track);
         info.speed = s;
+        if (session != null) PlaybackService.update(ctx, info, this);
     }
+
+    /** One step of 0.25 slower or faster, from the notification. */
+    private void stepSpeed(int dir) {
+        float s = Math.max(MIN_SPEED, Math.min(MAX_SPEED, Math.round((speed + dir * 0.25f) * 4f) / 4f));
+        setSpeed(s);
+        listener.onSpeed(s);
+    }
+
+    static final float MIN_SPEED = 0.5f, MAX_SPEED = 4f;
 
     void stop() {
         endSession();
@@ -499,6 +511,8 @@ final class Speaker implements PlaybackService.Controller {
             case PlaybackService.PAUSE: if (session != null) pause(); break;
             case PlaybackService.BACK: skip(-1); break;
             case PlaybackService.FORWARD: skip(1); break;
+            case PlaybackService.SLOWER: stepSpeed(-1); break;
+            case PlaybackService.FASTER: stepSpeed(1); break;
             case PlaybackService.STOP:
                 endSession();
                 abandonFocus();

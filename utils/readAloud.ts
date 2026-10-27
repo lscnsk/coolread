@@ -26,7 +26,7 @@ interface ReadAloudPlugin {
   skipSpeech(o: { delta: number }): Promise<void>;
   setSpeechSpeed(o: { speed: number }): Promise<void>;
   stopSpeech(): Promise<void>;
-  addListener(event: 'speech', cb: (e: { state?: string; chapter?: number; index?: number; word?: number }) => void): Promise<unknown>;
+  addListener(event: 'speech', cb: (e: { state?: string; chapter?: number; index?: number; word?: number; speed?: number }) => void): Promise<unknown>;
   addListener(event: 'need', cb: (e: { chapter: number }) => void): Promise<unknown>;
 }
 
@@ -53,7 +53,8 @@ export interface ReaderNav {
   info: () => Promise<NowPlayingInfo>;
 }
 
-export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
+// Steps of 0.25 (the notification steps the same way)
+export const SPEEDS = Array.from({ length: 15 }, (_, i) => 0.5 + i * 0.25);
 
 interface State {
   open: boolean;
@@ -614,6 +615,12 @@ async function handNext(chapter: number) {
 
 if (isNative) {
   Native.addListener('speech', e => {
+    if (typeof e.speed === 'number') {
+      // Changed with the buttons in the notification
+      set({ speed: e.speed });
+      savePrefs();
+      return;
+    }
     if (e.state) {
       if (e.state === 'playing') set({ playing: true, loading: false });
       else if (e.state === 'loading') set({ playing: true, loading: true });

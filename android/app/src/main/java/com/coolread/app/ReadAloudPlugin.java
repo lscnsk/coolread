@@ -158,6 +158,13 @@ public class ReadAloudPlugin extends Plugin {
                     o.put("chapter", chapter);
                     notifyListeners("need", o);
                 }
+
+                @Override
+                public void onSpeed(float speed) {
+                    JSObject o = new JSObject();
+                    o.put("speed", speed);
+                    notifyListeners("speech", o);
+                }
             });
         }
         return speaker;
