@@ -110,11 +110,7 @@ final class Speaker implements PlaybackService.Controller {
         Thread writer;
 
         Session() {
-            int min = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            track = new AudioTrack(
-                new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
-                new AudioFormat.Builder().setSampleRate(RATE).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build(),
-                Math.max(min, RATE / 5 * 2), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
+            track = obtainTrack();
             applySpeed(track);
         }
 
@@ -200,11 +196,22 @@ final class Speaker implements PlaybackService.Controller {
             } catch (InterruptedException ignored) {}
         }
 
-        void cancel() {
+        /** Stops this run. The track stays for the next run (keep) or is let go. */
+        void cancel(boolean keep) {
             cancelled = true;
             synchronized (lock) { lock.notifyAll(); }
-            try { track.pause(); track.flush(); } catch (Exception ignored) {}
+            try { track.pause(); } catch (Exception ignored) {}
             Thread w = writer;
+            if (keep) {
+                // The writer stops within one short wait; then nothing old is left in the track
+                try { if (w != null) w.join(250); } catch (InterruptedException ignored) {}
+                if (w == null || !w.isAlive()) {
+                    try { track.flush(); } catch (Exception ignored) {}
+                    return;
+                }
+                shared = null; // the writer is stuck: give the next run a fresh track
+            }
+            try { track.flush(); } catch (Exception ignored) {}
             new Thread(() -> {
                 try { if (w != null) w.join(2000); } catch (InterruptedException ignored) {}
                 track.release();
@@ -244,6 +251,26 @@ final class Speaker implements PlaybackService.Controller {
         asked = true;
         int chapter = items.get(items.size() - 1).chapter;
         main.post(() -> listener.onNeed(chapter));
+    }
+
+    // One track for all runs: a new track for every skip lost the speed for a moment on some phones
+    private AudioTrack shared;
+
+    private AudioTrack obtainTrack() {
+        if (shared != null && shared.getState() == AudioTrack.STATE_INITIALIZED) return shared;
+        int min = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        shared = new AudioTrack(
+            new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
+            new AudioFormat.Builder().setSampleRate(RATE).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build(),
+            Math.max(min, RATE / 5 * 2), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
+        return shared;
+    }
+
+    /** Puts the speed back if the phone dropped it. */
+    private void keepSpeed(AudioTrack t) {
+        try {
+            if (Math.abs(t.getPlaybackParams().getSpeed() - speed) > 0.01f) applySpeed(t);
+        } catch (Exception ignored) {}
     }
 
     private void applySpeed(AudioTrack t) {
@@ -323,7 +350,7 @@ final class Speaker implements PlaybackService.Controller {
     }
 
     void stop() {
-        stopSession();
+        endSession();
         synchronized (lock) {
             items.clear();
             complete = false;
@@ -349,12 +376,23 @@ final class Speaker implements PlaybackService.Controller {
         main.post(monitor);
     }
 
+    /** Ends the current run; the track is kept for the run that follows. */
     private void stopSession() {
         main.removeCallbacks(monitor);
         if (session != null) {
-            session.cancel();
+            session.cancel(true);
             session = null;
         }
+    }
+
+    /** Ends the current run and lets the track go (reading is over). */
+    private void endSession() {
+        main.removeCallbacks(monitor);
+        if (session != null) {
+            session.cancel(false);
+            session = null;
+        }
+        shared = null;
     }
 
     private void state(String st) {
@@ -371,6 +409,7 @@ final class Speaker implements PlaybackService.Controller {
     }
 
     /** Follows the track: which sentence and word are heard now. */
+    private int ticks;
     private final Runnable monitor = new Runnable() {
         @Override
         public void run() {
@@ -399,8 +438,9 @@ final class Speaker implements PlaybackService.Controller {
                 // Waiting for the voice (or for the next chapter)
                 state("loading");
             }
+            if (!paused && ++ticks % 8 == 0) keepSpeed(s.track);
             if (s.finished()) {
-                stopSession();
+                endSession();
                 abandonFocus();
                 lastState = "";
                 listener.onState("ended");
@@ -460,7 +500,7 @@ final class Speaker implements PlaybackService.Controller {
             case PlaybackService.BACK: skip(-1); break;
             case PlaybackService.FORWARD: skip(1); break;
             case PlaybackService.STOP:
-                stopSession();
+                endSession();
                 abandonFocus();
                 lastState = "";
                 listener.onState("stopped");

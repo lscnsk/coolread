@@ -3,6 +3,10 @@ import { ChevronDown, ChevronRight, Minus } from 'lucide-react';
 import { CatalogSeries, CatalogBook } from '../data/catalogData';
 import { OpdsSource, normalizeOpdsUrl, MANGADEX_SOURCE } from '../utils/opds';
 import { openSite } from '../utils/webBrowser';
+import { Capacitor } from '@capacitor/core';
+
+// The web version keeps only the built-in catalogs: adding one needs the app
+const canAddCatalogs = Capacitor.isNativePlatform();
 
 interface CatalogSidebarProps {
   isOpen: boolean;
@@ -587,20 +591,20 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = React.memo(({
                             {src.title}
                           </span>
                         </button>
-                        <button
+                        {canAddCatalogs && <button
                           onClick={() => { if (window.confirm(`Delete ${src.title}?`)) onDeleteOpds?.(src.id); }}
                           className="px-2 rounded-md flex items-center justify-center text-base opacity-60 hover:opacity-100"
                           title="Delete"
                         >
                           🗑️
-                        </button>
+                        </button>}
                       </div>
                     </li>
                   );
                 })}
               </ul>
 
-              {isAddingOpds ? (
+              {!canAddCatalogs ? null : isAddingOpds ? (
                 <form
                   className="mt-2 space-y-2 px-1"
                   onSubmit={e => {
