@@ -88,10 +88,13 @@ export function useRsvp({
      let pendingLeadingNode: Node | null = null;
      let pendingParaStart = false;
      let pendingFootnote = "";
+     // The last text ended inside a word: typography wraps parts of words in spans
+     // (a letter kept with a dash, a drop cap), and those parts are one word
+     let glued = false;
 
      while (n = walker.nextNode()) {
          const val = n.nodeValue;
-         if (!val || val.trim() === '') continue;
+         if (!val || val.trim() === '') { if (val) glued = false; continue; }
          
          const parent = n.parentElement;
          const blockParent = parent ? (parent.closest('p, div, h1, h2, h3, h4, h5, h6, li') || parent) : null;
@@ -113,10 +116,18 @@ export function useRsvp({
              }
          }
 
+         const continuesWord = glued && !isNewBlock && !/^\s/.test(val) && words.length > 0 && !pendingLeading && !isFootnoteNode(n);
+         glued = !/\s$/.test(val);
          const split = val.split(/\s+/);
-         for (const w of split) {
+         for (let wi = 0; wi < split.length; wi++) {
+             const w = split[wi];
              const cleanWord = w.trim().replace(/\xad/g, '');
              if (cleanWord.length === 0) continue;
+
+             if (wi === 0 && continuesWord && !isFootnoteToken(cleanWord, n)) {
+                 words[words.length - 1].word += cleanWord;
+                 continue;
+             }
 
              // Check if this token is a footnote reference marker
              if (isFootnoteToken(cleanWord, n)) {
