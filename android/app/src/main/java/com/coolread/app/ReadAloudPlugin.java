@@ -173,9 +173,13 @@ public class ReadAloudPlugin extends Plugin {
     private static List<Speaker.Item> items(PluginCall call) {
         int chapter = call.getInt("chapter", 0);
         JSArray arr = call.getArray("sentences");
+        JSArray pauses = call.getArray("pauses");
         List<Speaker.Item> list = new ArrayList<>();
         if (arr != null) {
-            for (int i = 0; i < arr.length(); i++) list.add(new Speaker.Item(chapter, i, arr.optString(i, "")));
+            for (int i = 0; i < arr.length(); i++) {
+                int pause = pauses != null ? pauses.optInt(i, 0) : 0;
+                list.add(new Speaker.Item(chapter, i, arr.optString(i, ""), pause));
+            }
         }
         return list;
     }

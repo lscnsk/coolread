@@ -787,7 +787,7 @@ function App() {
       // Same steps and limits as the speed buttons of the player
       else if (e.action === 'slower' || e.action === 'faster') {
         const r = Math.round((a.playbackRate + (e.action === 'faster' ? 0.25 : -0.25)) * 4) / 4;
-        a.setPlaybackRate(Math.max(1, Math.min(4, r)));
+        a.setPlaybackRate(Math.max(1, Math.min(5, r)));
       }
     });
     return () => { h.then(x => x.remove()); };

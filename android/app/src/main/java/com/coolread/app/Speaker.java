@@ -43,11 +43,13 @@ final class Speaker implements PlaybackService.Controller {
     static final class Item {
         final int chapter, index;
         final String text;
+        final int pauseMs; // silence after it: around titles and at the end of a chapter
 
-        Item(int chapter, int index, String text) {
+        Item(int chapter, int index, String text, int pauseMs) {
             this.chapter = chapter;
             this.index = index;
             this.text = text;
+            this.pauseMs = pauseMs;
         }
     }
 
@@ -145,8 +147,9 @@ final class Speaker implements PlaybackService.Controller {
                 Chunk c;
                 try {
                     SileroTts.Result r = synth.run(it.text);
-                    short[] pcm = new short[r.audio.length];
-                    for (int i = 0; i < pcm.length; i++) {
+                    // The pause is silence at the end of the sentence's audio (zeros)
+                    short[] pcm = new short[r.audio.length + Math.max(0, it.pauseMs) * RATE / 1000];
+                    for (int i = 0; i < r.audio.length; i++) {
                         float s = Math.max(-1f, Math.min(1f, r.audio[i]));
                         pcm[i] = (short) Math.round(s * 32767f);
                     }
@@ -359,7 +362,7 @@ final class Speaker implements PlaybackService.Controller {
         listener.onSpeed(s);
     }
 
-    static final float MIN_SPEED = 0.5f, MAX_SPEED = 4f;
+    static final float MIN_SPEED = 0.5f, MAX_SPEED = 5f;
 
     void stop() {
         endSession();

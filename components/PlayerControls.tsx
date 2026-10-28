@@ -89,9 +89,8 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   };
 
   const adjustSpeed = (delta: number) => {
-      // Clamp between 1.0 and 4.0 based on new requirements
       const newRate = Math.round((playbackRate + delta) * 100) / 100;
-      onRateChange(Math.max(1.0, Math.min(4.0, newRate)));
+      onRateChange(Math.max(1.0, Math.min(5.0, newRate)));
   };
 
   const hasChapters = currentBook && currentBook.chapters && currentBook.chapters.length > 1;
@@ -275,7 +274,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
 
                  {/* Ruler Ticks */}
                  <div className="absolute top-1/2 left-0 w-full h-4 -translate-y-1/2 flex justify-between items-center px-1 pointer-events-none z-0">
-                     {[1, 1.5, 2, 2.5, 3, 3.5, 4].map((tick) => (
+                     {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((tick) => (
                          <div key={tick} className="flex flex-col items-center gap-1 relative">
                             {/* Tick mark */}
                             <div className={`w-0.5 ${Number.isInteger(tick) ? 'h-3' : 'h-1.5'}`} style={{ backgroundColor: palette.ruler }}></div>
@@ -287,7 +286,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
                  <input 
                     type="range"
                     min="1.0"
-                    max="4.0"
+                    max="5.0"
                     step="0.05"
                     value={Math.max(1.0, playbackRate)}
                     onChange={handleSpeedSlider}

@@ -19,8 +19,8 @@ export interface Voice {
 interface ReadAloudPlugin {
   listVoices(): Promise<{ voices: Voice[] }>;
   prepare(o: { voice: string }): Promise<void>;
-  speak(o: { voice: string; chapter: number; sentences: string[]; start: number; last: boolean; speed: number; title: string; info: NowPlayingInfo }): Promise<void>;
-  append(o: { chapter: number; sentences: string[]; last: boolean; title: string }): Promise<void>;
+  speak(o: { voice: string; chapter: number; sentences: string[]; pauses: number[]; start: number; last: boolean; speed: number; title: string; info: NowPlayingInfo }): Promise<void>;
+  append(o: { chapter: number; sentences: string[]; pauses?: number[]; last: boolean; title: string }): Promise<void>;
   pauseSpeech(): Promise<void>;
   resumeSpeech(): Promise<{ resumed: boolean }>;
   skipSpeech(o: { delta: number }): Promise<void>;
@@ -54,7 +54,7 @@ export interface ReaderNav {
 }
 
 // Steps of 0.25 (the notification steps the same way)
-export const SPEEDS = Array.from({ length: 15 }, (_, i) => 0.5 + i * 0.25);
+export const SPEEDS = Array.from({ length: 19 }, (_, i) => 0.5 + i * 0.25);
 
 interface State {
   open: boolean;
@@ -149,7 +149,7 @@ export function setSpeed(speed: number) {
 
 interface Piece { node: Text; start: number; }
 // tok: which space-separated word of `text` the word belongs to (voices that report word times use it)
-interface Sentence { start: number; end: number; block: number; text: string; words: { start: number; end: number; weight: number; tok: number }[]; }
+interface Sentence { start: number; end: number; block: number; heading?: boolean; text: string; words: { start: number; end: number; weight: number; tok: number }[]; }
 
 let nav: ReaderNav | null = null;
 let full = '';
@@ -179,12 +179,14 @@ function extract(root: HTMLElement) {
   });
   let block: Element | null = null;
   const blockBounds: number[] = [0];
+  headings = [];
   for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
     const b = n.parentElement?.closest(BLOCKS) || root;
     if (b !== block && full.length > 0) {
       full += '\n';
       blockBounds.push(full.length);
     }
+    if (b !== block) headings[blockBounds.length - 1] = !!n.parentElement?.closest(HEADINGS);
     block = b;
     pieces.push({ node: n, start: full.length });
     full += n.data;
@@ -198,21 +200,31 @@ function extract(root: HTMLElement) {
 }
 
 /** Sentences of a chapter that is not on screen, from its HTML. */
-function sentencesOf(html: string): string[] {
-  if (!html) return [];
-  const saved = { full, pieces, sentences };
+function sentencesOf(html: string): { texts: string[]; pauses: number[] } {
+  const none = { texts: [], pauses: [] };
+  if (!html) return none;
+  const saved = { full, pieces, sentences, headings };
   try {
     extract(new DOMParser().parseFromString(html, 'text/html').body);
-    return sentences.map(s => s.text);
+    return { texts: sentences.map(s => s.text), pauses: pausesOf(sentences) };
   } catch {
-    return [];
+    return none;
   } finally {
-    ({ full, pieces, sentences } = saved);
+    ({ full, pieces, sentences, headings } = saved);
   }
 }
 
 const MAX = 280;
 let currentBlock = 0;
+// Which blocks are titles (the voice pauses around them)
+let headings: boolean[] = [];
+const HEADINGS = 'h1,h2,h3,h4,h5,h6,.title,.subtitle';
+
+// Silence after a sentence, ms: around titles, and at the end of a chapter
+const PAUSE_TITLE = 900, PAUSE_CHAPTER = 1300;
+function pausesOf(list: Sentence[]): number[] {
+  return list.map((s, i) => (i === list.length - 1 ? PAUSE_CHAPTER : s.heading || list[i + 1]?.heading ? PAUSE_TITLE : 0));
+}
 
 function splitSentences(from: number, to: number) {
   const text = full.slice(from, to);
@@ -252,7 +264,7 @@ function add(start: number, end: number) {
     const tok = before ? before.split(/\s+/).length - 1 : 0;
     words.push({ start: start + m.index, end: start + m.index + m[0].length, weight, tok });
   }
-  if (words.length) sentences.push({ start, end, block: currentBlock, text, words });
+  if (words.length) sentences.push({ start, end, block: currentBlock, heading: headings[currentBlock], text, words });
 }
 
 function pieceAt(pos: number): Piece {
@@ -440,7 +452,7 @@ function speakSentence(i: number) {
   const u = new SpeechSynthesisUtterance(s.text);
   const v = speech!.getVoices().find(x => SYS + x.voiceURI === state.voice);
   if (v) { u.voice = v; u.lang = v.lang; }
-  u.rate = Math.max(0.5, Math.min(state.speed, 4));
+  u.rate = Math.max(0.5, Math.min(state.speed, 5));
   u.onstart = () => {
     if (myEpoch !== epoch) return;
     set({ loading: false });
@@ -503,7 +515,14 @@ async function playSentence(i: number) {
 function sentenceEnded() {
   if (!state.playing) return;
   if (current + 1 < sentences.length) {
-    playSentence(current + 1);
+    const next = current + 1;
+    const pause = sentences[current]?.heading || sentences[next]?.heading ? PAUSE_TITLE / state.speed : 0;
+    if (!pause) {
+      playSentence(next);
+      return;
+    }
+    const myEpoch = epoch;
+    setTimeout(() => { if (myEpoch === epoch && state.playing) playSentence(next); }, pause);
     return;
   }
   // End of the chapter: open the next one and carry on from its start
@@ -530,7 +549,7 @@ function sentenceEnded() {
     } else if (tries++ < 50) setTimeout(wait, 200);
     else stop();
   };
-  setTimeout(wait, 200);
+  setTimeout(wait, 200 + PAUSE_CHAPTER / state.speed);
 }
 audio.onended = () => sentenceEnded();
 
@@ -603,10 +622,10 @@ async function handNext(chapter: number) {
   if (!nav || !speaking) return;
   const count = nav.chapterCount();
   for (let k = chapter + 1; k < count; k++) {
-    const list = sentencesOf(nav.chapterHtml(k));
+    const { texts: list, pauses } = sentencesOf(nav.chapterHtml(k));
     if (list.length) {
       handed.set(k, list);
-      await Native.append({ chapter: k, sentences: list, last: false, title: nav.chapterTitle(k) });
+      await Native.append({ chapter: k, sentences: list, pauses, last: false, title: nav.chapterTitle(k) });
       return;
     }
   }
@@ -671,7 +690,7 @@ async function playNative(root: HTMLElement) {
   const info = await nav!.info().catch(() => ({ title: '', subtitle: '' }));
   try {
     await Native.speak({
-      voice: state.voice || '', chapter, sentences: list, start, last: false, speed: state.speed,
+      voice: state.voice || '', chapter, sentences: list, pauses: pausesOf(sentences), start, last: false, speed: state.speed,
       title: nav!.chapterTitle(chapter), info: { ...info, title: nav!.chapterTitle(chapter) || info.title },
     });
   } catch {
