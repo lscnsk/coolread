@@ -13,6 +13,8 @@ interface UseRsvpProps {
     processedContent: string;
     containerRef: React.RefObject<HTMLDivElement>;
     rsvpStartBlockIndexRef: React.MutableRefObject<number | null>;
+    /** The first word of the first visible line, found before RSVP was turned on */
+    rsvpStartWordRef?: React.MutableRefObject<{ block: number; word: number } | null>;
     rsvpWpm: number;
     isPagedMode?: boolean;
     pagedContainerRef?: React.RefObject<HTMLDivElement>;
@@ -23,6 +25,7 @@ export function useRsvp({
     processedContent,
     containerRef,
     rsvpStartBlockIndexRef,
+    rsvpStartWordRef,
     rsvpWpm,
     isPagedMode,
     pagedContainerRef
@@ -218,7 +221,20 @@ export function useRsvp({
      let startIndex = 0;
      let foundStart = false;
 
-     if (isPagedMode && pagedContainerRef?.current) {
+     const startWord = rsvpStartWordRef?.current;
+     if (startWord && containerRef.current) {
+         const block = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))[startWord.block];
+         if (block) {
+             const inBlock: number[] = [];
+             for (let i = 0; i < words.length; i++) if (block.contains(words[i].node)) inBlock.push(i);
+             if (inBlock.length) {
+                 startIndex = inBlock[Math.min(startWord.word, inBlock.length - 1)];
+                 foundStart = true;
+             }
+         }
+     }
+
+     if (!foundStart && isPagedMode && pagedContainerRef?.current) {
          const containerRect = pagedContainerRef.current.getBoundingClientRect();
          for (let i = 0; i < words.length; i++) {
              const parent = words[i].node.parentElement;

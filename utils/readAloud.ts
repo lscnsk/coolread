@@ -40,6 +40,8 @@ export interface ReaderNav {
   viewport: () => DOMRect | null;
   /** Brings a word on screen (scrolls or turns the page). */
   reveal: (rect: DOMRect) => void;
+  /** Page by page: reveal is asked for every word and turns the page itself. */
+  paged?: () => boolean;
   /** Opens the next chapter; false at the end of the book. */
   nextChapter: () => boolean;
   /** Chapter on screen, number of chapters, and a chapter's text as HTML ('' if it has none). */
@@ -159,7 +161,8 @@ let builtFor: HTMLElement | null = null;
 let builtText = '';
 
 const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,blockquote,div,td,th,dd,dt,pre,section,article,figcaption';
-const SKIP = 'script,style,sup,rt,rp,.footnote-ref,[aria-hidden="true"]';
+// Not read aloud: footnote numbers among them
+const SKIP = 'script,style,sup,rt,rp,.footnote-ref,[aria-hidden="true"],a[type="note"],a[epub\\:type="noteref"],a[role="doc-noteref"],a.note-link,a.noteref,a[href^="#note"],a[href^="#fn"]';
 // Soft hyphens from the layout may sit inside a word
 const WORD = /[\p{L}\p{N}][\p{L}\p{N}\p{M}'’\-́\u00AD]*/gu;
 
@@ -251,6 +254,11 @@ function splitSentences(from: number, to: number) {
 }
 
 function add(start: number, end: number) {
+  const s = makeSentence(start, end);
+  if (s) sentences.push(s);
+}
+
+function makeSentence(start: number, end: number): Sentence | null {
   // Soft hyphens from the layout are not spoken
   const text = full.slice(start, end).replace(/\u00AD/g, '').replace(/\s+/g, ' ').trim();
   const words: Sentence['words'] = [];
@@ -264,7 +272,19 @@ function add(start: number, end: number) {
     const tok = before ? before.split(/\s+/).length - 1 : 0;
     words.push({ start: start + m.index, end: start + m.index + m[0].length, weight, tok });
   }
-  if (words.length) sentences.push({ start, end, block: currentBlock, heading: headings[currentBlock], text, words });
+  return words.length ? { start, end, block: currentBlock, heading: headings[currentBlock], text, words } : null;
+}
+
+/** Splits sentence i before its word k, so reading can start mid-sentence; the index to start from. */
+function splitAt(i: number, k: number): number {
+  const s = sentences[i];
+  if (!s || k <= 0 || k >= s.words.length) return i;
+  currentBlock = s.block;
+  const a = makeSentence(s.start, s.words[k].start), b = makeSentence(s.words[k].start, s.end);
+  if (!a || !b) return i;
+  a.heading = b.heading = s.heading;
+  sentences.splice(i, 1, a, b);
+  return i + 1;
 }
 
 function pieceAt(pos: number): Piece {
@@ -318,17 +338,19 @@ function rangeOf(start: number, end: number): Range | null {
 }
 
 /** Start of the first paragraph that is on screen, even if it begins above it. */
+/** The sentence to start from: the first word on the first visible line (a sentence begun above it is split there). */
 function firstVisible(): number {
   const view = nav?.viewport();
   if (!view) return 0;
   for (let i = 0; i < sentences.length; i++) {
     const w = sentences[i].words;
     const r = rangeOf(w[w.length - 1].start, w[w.length - 1].end)?.getBoundingClientRect();
-    if (r && r.height > 0 && r.bottom > view.top + 4 && r.top < view.bottom) {
-      let k = i;
-      while (k > 0 && sentences[k - 1].block === sentences[i].block) k--;
-      return k;
+    if (!(r && r.height > 0 && r.bottom > view.top + 4 && r.top < view.bottom)) continue;
+    for (let k = 0; k < w.length; k++) {
+      const wr = rangeOf(w[k].start, w[k].end)?.getBoundingClientRect();
+      if (wr && wr.height > 0 && wr.top + wr.height / 2 >= view.top) return splitAt(i, k);
     }
+    return i;
   }
   return 0;
 }
@@ -402,7 +424,8 @@ function showWord(i: number, k: number) {
   highlight(r);
   const rect = r?.getBoundingClientRect();
   const view = nav?.viewport();
-  if (rect && view && rect.height > 0 && (rect.bottom > view.bottom - 8 || rect.top < view.top)) nav?.reveal(rect);
+  if (!rect || !view || rect.height <= 0) return;
+  if (nav?.paged?.() || rect.bottom > view.bottom - 8 || rect.top < view.top) nav?.reveal(rect);
 }
 
 function prefetch(i: number) {
@@ -665,6 +688,9 @@ if (isNative) {
 
 async function playNative(root: HTMLElement) {
   set({ playing: true, error: null });
+  // The saved speed must be known before the voice starts
+  if (!prefsLoaded) prefsLoaded = loadPrefs();
+  await prefsLoaded;
   const sameText = builtFor === root && builtText === (root.textContent || '');
   if (speaking && spoken.chapter === nav!.chapter() && sameText && current >= 0 && isOnScreen(current)) {
     // Resume where it paused
@@ -678,8 +704,8 @@ async function playNative(root: HTMLElement) {
     return;
   }
   const chapter = nav!.chapter();
+  const start = firstVisible(); // may split a sentence: before the list is made
   const list = sentences.map(s => s.text);
-  const start = firstVisible();
   handed.clear();
   handed.set(chapter, list);
   speaking = true;

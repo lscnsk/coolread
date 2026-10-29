@@ -2061,6 +2061,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
       top: number;
       bottom: number;
       isHeading: boolean;
+      /** A title inside the chapter: it starts a new page */
+      isTitle?: boolean;
     }
 
     const boxes: LineBox[] = [];
@@ -2097,6 +2099,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                         el.classList.contains('injected-title') ||
                         el.classList.contains('book-cover-title') ||
                         Boolean(el.closest('h1, h2, h3, h4, h5, h6, .title, .injected-title'));
+      // Section titles (not scene breaks like "* * *", which are subtitles)
+      const isTitle = isHeading && !el.closest('.subtitle');
 
       const elRect = el.getBoundingClientRect();
       const elTop = Math.round(elRect.top - contentTop);
@@ -2152,7 +2156,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 linesInEl.push({
                   top: mr.top,
                   bottom: mr.bottom,
-                  isHeading
+                  isHeading,
+                  isTitle
                 });
               }
             }
@@ -2224,6 +2229,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         prev.top = Math.min(prev.top, b.top);
         prev.bottom = Math.max(prev.bottom, b.bottom);
         if (b.isHeading) prev.isHeading = true;
+        if (b.isTitle) prev.isTitle = true;
       } else {
         mergedBoxes.push({ ...b });
       }
@@ -2249,6 +2255,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
 
       for (let j = boxIndex; j < mergedBoxes.length; j++) {
         const curBox = mergedBoxes[j];
+        // A title inside the chapter starts a new page (the first lines of a page can be the title itself)
+        if (j > boxIndex && curBox.isTitle && !mergedBoxes[j - 1].isHeading) break;
         // Test if curBox fits within availableH when given interlineOffset clearance
         const proposedEnd = curBox.bottom + interlineOffset;
         const proposedTextH = proposedEnd - pageStartY;
@@ -2584,6 +2592,48 @@ const EBookReader: React.FC<EBookReaderProps> = ({
   }, [pageIndex, totalPages, propChapterIndex, book.chapters.length, onProgressUpdate, onChapterChange]);
 
   // Reading aloud: let the voice find the text and keep the spoken word on screen
+  /** The first word at or below y: its block (index in blocks) and how many words of the block come before it. */
+  const firstVisibleWord = (blocks: Element[], y: number): { block: number; word: number } | null => {
+    const WORD = /[\p{L}\p{N}]/u;
+    for (let b = 0; b < blocks.length; b++) {
+      const br = blocks[b].getBoundingClientRect();
+      if (br.bottom <= y + 2 || br.height === 0) continue;
+      const walker = document.createTreeWalker(blocks[b], NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+        const re = /\S+/g;
+        for (let m = re.exec(n.data); m; m = re.exec(n.data)) {
+          if (!WORD.test(m[0])) continue;
+          range.setStart(n, m.index);
+          range.setEnd(n, m.index + 1);
+          const r = range.getBoundingClientRect();
+          // A line counts as visible when its middle is below the edge
+          if (r.height > 0 && r.top + r.height / 2 >= y) {
+            // Words of the block before this one, counted the way RSVP counts them (spaces between)
+            const before = document.createRange();
+            before.setStart(blocks[b], 0);
+            before.setEnd(n, m.index);
+            const prior = before.toString().replace(/\u00AD/g, '').split(/\s+/).filter(t => WORD.test(t) && !/^\[\d+\]$/.test(t));
+            // A word glued to text before it (a drop cap) is the same word
+            const glued = m.index > 0 ? !/\s/.test(n.data[m.index - 1]) : prior.length > 0 && !/\s$/.test(before.toString());
+            return { block: b, word: Math.max(0, prior.length - (glued ? 1 : 0)) };
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  /** Where the text starts being visible: under the top bar when it is shown. */
+  const visibleTop = () => {
+    const r = containerRef.current?.getBoundingClientRect();
+    let top = r ? r.top : 0;
+    document.querySelectorAll('.bimbo-header').forEach(h => {
+      const hr = (h as HTMLElement).getBoundingClientRect();
+      if (hr.bottom > top && hr.height > 0) top = hr.bottom;
+    });
+    return top;
+  };
   const readAloudRef = useRef({ handlePageTurn, propChapterIndex, chapterCount: book.chapters.length, onChapterChange, onProgressUpdate, uiVisible, book, appStyle, isStyledMode });
   readAloudRef.current = { handlePageTurn, propChapterIndex, chapterCount: book.chapters.length, onChapterChange, onProgressUpdate, uiVisible, book, appStyle, isStyledMode };
   useEffect(() => {
@@ -2594,26 +2644,27 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         if (isPagedModeRef.current) return pagesContainerRef.current?.getBoundingClientRect() || null;
         const r = containerRef.current?.getBoundingClientRect();
         if (!r) return null;
-        // Leave out the parts covered by the top bar and by the bottom panel with the player
-        const top = r.top + 90, bottom = r.bottom - (readAloudRef.current.uiVisible ? 190 : 40);
+        // Leave out the parts covered by the top bar (when it is shown) and by the bottom panel with the player
+        const top = Math.max(r.top + 8, visibleTop() + 2), bottom = r.bottom - (readAloudRef.current.uiVisible ? 190 : 40);
         return new DOMRect(r.left, top, r.width, Math.max(50, bottom - top));
       },
+      paged: () => isPagedModeRef.current,
       reveal: (rect) => {
         if (isPagedModeRef.current) {
           const content = contentRef.current;
           const slices = pageSlicesRef.current;
-          if (!content || slices.length === 0 || Date.now() - lastTurn < 700) return;
+          // Called for every spoken word: turns as soon as the word is on another page.
+          // Never changes the chapter (the voice does that), and waits for the chapter's pages
+          if (!content || slices.length === 0 || isChapterSwitchingRef.current || Date.now() - lastTurn < 250) return;
+          // The content is shifted to the page, so this is the word's place in the whole chapter
           const y = rect.top - content.getBoundingClientRect().top;
           const idx = slices.findIndex((sl, i) => (slices[i + 1] ? y >= sl.startY - 2 && y < slices[i + 1].startY - 2 : true));
-          if (idx < 0 || idx === pageIndexRef.current) return;
+          if (idx < 0 || idx === pageIndexRef.current || idx >= slices.length) return;
           lastTurn = Date.now();
-          if (idx === pageIndexRef.current + 1) readAloudRef.current.handlePageTurn('next');
-          else {
-            setPageIndex(idx);
-            const ratio = slices.length > 1 ? idx / (slices.length - 1) : 0;
-            lastProgressRef.current = ratio;
-            readAloudRef.current.onProgressUpdate(ratio);
-          }
+          setPageIndex(idx);
+          const ratio = slices.length > 1 ? idx / (slices.length - 1) : 0;
+          lastProgressRef.current = ratio;
+          readAloudRef.current.onProgressUpdate(ratio);
           return;
         }
         const c = containerRef.current;
@@ -2943,6 +2994,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
   const prevIsRsvpRef = useRef(isRsvpMode);
   const bionicAnchorRef = useRef<{ index: number; offset: number } | null>(null);
   const rsvpStartBlockIndexRef = useRef<number | null>(null);
+  // RSVP starts at the first word of the first visible line: its block and its place among the block's words
+  const rsvpStartWordRef = useRef<{ block: number; word: number } | null>(null);
 
   useEffect(() => {
       const isBionicChanged = isBionic !== prevIsBionicRef.current;
@@ -3002,6 +3055,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                           rsvpBlockIdx = bestBlockIndex;
                       }
                       rsvpStartBlockIndexRef.current = rsvpBlockIdx;
+                      const top = isPagedMode ? (pagesContainerRef.current?.getBoundingClientRect().top ?? containerRect.top) : visibleTop();
+                      rsvpStartWordRef.current = firstVisibleWord(blocks, top);
                   }
               }
           }
@@ -3010,6 +3065,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
       // If RSVP mode is closed, clear the start block ref
       if (!isRsvpMode) {
           rsvpStartBlockIndexRef.current = null;
+          rsvpStartWordRef.current = null;
       }
   }, [isBionic, isRsvpMode]);
 
@@ -3400,6 +3456,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
       processedContent,
       containerRef: activeContentRef,
       rsvpStartBlockIndexRef,
+      rsvpStartWordRef,
       rsvpWpm,
       isPagedMode,
       pagedContainerRef

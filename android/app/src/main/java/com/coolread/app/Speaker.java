@@ -122,10 +122,26 @@ final class Speaker implements PlaybackService.Controller {
             engine.submit(() -> produce(from));
             writer = new Thread(this::write, "speech-writer");
             writer.start();
-            if (!paused) {
-                track.play();
-                applySpeed(track); // some phones drop the speed when the track starts
-            }
+            // The track starts with the first sound written (see write): some phones start
+            // an empty track at normal speed whatever was set before
+        }
+
+        private volatile boolean started;
+
+        /** First sound is in the track: play it, at the set speed. */
+        private void begin() {
+            if (started) return;
+            started = true;
+            main.post(() -> {
+                if (cancelled || session != this) return;
+                applySpeed(track);
+                if (!paused) {
+                    track.play();
+                    applySpeed(track);
+                    // and once more when it is really playing
+                    main.postDelayed(() -> { if (!cancelled && session == this) applySpeed(track); }, 250);
+                }
+            });
         }
 
         private void produce(int pos) {
@@ -181,6 +197,7 @@ final class Speaker implements PlaybackService.Controller {
                     while (!cancelled && off < c.pcm.length) {
                         int n = track.write(c.pcm, off, c.pcm.length - off, AudioTrack.WRITE_NON_BLOCKING);
                         if (n < 0) return;
+                        if (n > 0) begin();
                         if (n == 0) Thread.sleep(20);
                         off += n;
                     }
