@@ -49,12 +49,12 @@ export function getStoredCatalogBooks(): CatalogBook[] {
 export function buildCatalogSeriesFromBooks(books: CatalogBook[]): CatalogSeries[] {
   const seriesMap = new Map<string, { id: string; name: string; authorsSet: Set<string> }>();
 
-  // Initialize with base CATALOG_SERIES
+  // Known series keep their ids; their authors come from the books (names change between editions)
   CATALOG_SERIES.forEach(s => {
     seriesMap.set(s.name.toLowerCase(), {
       id: s.id,
       name: s.name,
-      authorsSet: new Set(s.authors)
+      authorsSet: new Set<string>()
     });
   });
 
