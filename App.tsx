@@ -530,12 +530,50 @@ function App() {
       setBooks(prev => prev.map(b => b.id === lib.id ? updated : b));
       setEditionsTick(t => t + 1);
       if (currentBook?.id === lib.id) await handleSelectBook(updated);
+      setIncomingNotice({ text: `↻ «${catalogBook.title}» обновлена до новой редакции`, sticky: false });
     } catch (err) {
       console.error('Error updating book:', err);
     } finally {
       setDownloadingBookIds(prev => { const next = new Set(prev); next.delete(catalogBook.id); return next; });
     }
   };
+
+  // New editions download by themselves. The open book is replaced only while the reader is
+  // not looking at it (catalog or library open); otherwise it waits, so the text never changes
+  // mid-reading. The button stays as a fallback when a download fails.
+  const autoUpdateRef = useRef({ handleUpdateCatalogBook, currentBook, isCatalogOpen, isSidebarOpen });
+  autoUpdateRef.current = { handleUpdateCatalogBook, currentBook, isCatalogOpen, isSidebarOpen };
+  const autoUpdateTried = useRef(new Set<string>());
+  const autoUpdateBusy = useRef(false);
+  useEffect(() => {
+    if (!isLibraryReady || autoUpdateBusy.current || newEditions.size === 0) return;
+    (async () => {
+      autoUpdateBusy.current = true;
+      try {
+        for (const [libId, cat] of Array.from(newEditions.entries())) {
+          const { handleUpdateCatalogBook: update, currentBook: open, isCatalogOpen: catOpen, isSidebarOpen: libOpen } = autoUpdateRef.current;
+          const key = `${libId}:${cat.edition || cat.sizeBytes}`;
+          if (autoUpdateTried.current.has(key)) continue;
+          if (open?.id === libId && !catOpen && !libOpen) continue;
+          autoUpdateTried.current.add(key);
+          await update(cat);
+        }
+      } finally {
+        autoUpdateBusy.current = false;
+      }
+    })();
+  }, [isLibraryReady, newEditions, currentBook?.id, isCatalogOpen, isSidebarOpen]);
+
+  // A quiet catalog check shortly after start (one small catalog.json, at most hourly),
+  // so new editions are found without opening the catalog.
+  useEffect(() => {
+    if (!isLibraryReady) return;
+    const t = setTimeout(() => {
+      if (Date.now() - lastCatalogSyncTime() < 60 * 60 * 1000) return;
+      syncCatalogFromGitHub().then(({ books }) => setCatalogBooks(books)).catch(() => {});
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [isLibraryReady]);
 
   const handleReadCatalogBook = (catalogBook: CatalogBook) => {
     const cleanCatTitle = (catalogBook.title || '').toLowerCase().trim();

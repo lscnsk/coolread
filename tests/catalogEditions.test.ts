@@ -9,13 +9,14 @@ describe('new editions of lscnsk books', () => {
   beforeEach(() => localStorage.clear());
   it('compares the edition remembered at download', () => {
     rememberEdition('fr', 'aaa', 100);
-    expect(hasNewEdition(cat({ edition: 'aaa', sizeBytes: 100 }), lib({ size: 100 }))).toBe(false);
-    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 100 }), lib({ size: 100 }))).toBe(true);
+    expect(hasNewEdition(cat({ edition: 'aaa', sizeBytes: 100 }), lib({ size: 100, format: 'fb2' }))).toBe(false);
+    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 100 }), lib({ size: 100, format: 'fb2' }))).toBe(true);
   });
   it('falls back to the file size for books downloaded earlier', () => {
-    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 200 }), lib({ size: 100 }))).toBe(true);
-    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 100 }), lib({ size: 100 }))).toBe(false);
-    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 100 }), lib({}))).toBe(false);
+    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 200 }), lib({ size: 100, format: 'fb2' }))).toBe(true);
+    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 100 }), lib({ size: 100, format: 'fb2' }))).toBe(false);
+    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 100 }), lib({ format: 'fb2' }))).toBe(false);
+    expect(hasNewEdition(cat({ edition: 'bbb', sizeBytes: 200 }), lib({ size: 100, format: 'fb2', title: 'По эту сторону рая (моя)' }))).toBe(false);
   });
   it('finds the library copy and keeps the place once', () => {
     expect(findLibraryBook(cat({}), [lib({}) as any])?.id).toBe('external_1');

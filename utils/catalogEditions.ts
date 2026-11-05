@@ -41,8 +41,11 @@ export function hasNewEdition(catalogBook: CatalogBook, libBook: Book | undefine
   if (!libBook || libBook.type !== 'ebook') return false;
   const rec = (readJson<Record<string, EditionRecord>>(EDITIONS_KEY) || {})[catalogBook.id];
   if (rec?.edition && catalogBook.edition) return rec.edition !== catalogBook.edition;
-  const size = rec?.size || libBook.size;
-  if (catalogBook.sizeBytes && size) return catalogBook.sizeBytes !== size;
+  if (rec?.size) return Boolean(catalogBook.sizeBytes) && catalogBook.sizeBytes !== rec.size;
+  // Downloaded before editions were remembered: only a book with exactly the catalog's title
+  // (not just a similar one of the reader's own) is compared, by file size
+  const sameTitle = (libBook.title || '').trim().toLowerCase() === (catalogBook.title || '').trim().toLowerCase();
+  if (sameTitle && libBook.format === 'fb2' && catalogBook.sizeBytes && libBook.size) return catalogBook.sizeBytes !== libBook.size;
   return false;
 }
 
