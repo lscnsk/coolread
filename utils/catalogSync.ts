@@ -2,8 +2,9 @@ import { CatalogBook, CatalogSeries, CATALOG_BOOKS, CATALOG_SERIES, sortBooksChr
 
 const GITHUB_REPO_OWNER = 'lscnsk';
 const GITHUB_REPO_NAME = 'lscnsk_library';
-const CACHE_KEY = 'lscnsk_library_catalog_manifest_v3';
-const CACHE_TIME_KEY = 'lscnsk_library_last_sync_time_v3';
+// v4: books carry sampler links; a v3 list saved before them is fetched again
+const CACHE_KEY = 'lscnsk_library_catalog_manifest_v4';
+const CACHE_TIME_KEY = 'lscnsk_library_last_sync_time_v4';
 
 function formatBytes(bytes: number): string {
   if (!bytes || isNaN(bytes)) return '';
@@ -32,6 +33,8 @@ export function getStoredCatalogBooks(): CatalogBook[] {
     // Clear legacy v1 cache if present
     localStorage.removeItem('lscnsk_library_catalog_manifest_v1');
     localStorage.removeItem('lscnsk_library_catalog_manifest_v2');
+    localStorage.removeItem('lscnsk_library_catalog_manifest_v3');
+    localStorage.removeItem('lscnsk_library_last_sync_time_v3');
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
