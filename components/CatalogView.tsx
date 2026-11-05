@@ -377,7 +377,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                   <div key={book.id} className={miniBook ? 'sampler-swap-in' : undefined}>
                   {book.coverUrl ? (
                     <div
-                      className={`relative w-40 sm:w-full max-w-[210px] h-auto select-none block rounded-lg ${book.samplerFor ? 'sampler-glow' : ''}`}
+                      className={`relative w-40 sm:w-full max-w-[210px] h-auto select-none block rounded-lg`}
                       style={glowVars}
                     >
                       {book.badge && (
@@ -388,7 +388,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       <SmartCoverImage
                         src={book.coverUrl}
                         alt={book.title}
-                        className="w-full h-auto rounded-lg shadow-lg border border-white/10 select-none block"
+                        className={`w-full h-auto rounded-lg select-none block ${book.samplerFor ? 'sampler-glow' : 'shadow-lg border border-white/10'}`}
                         fallbackComponent={
                           <div
                             className={`w-full aspect-[2/3] rounded-lg shadow-lg bg-gradient-to-br ${
@@ -418,7 +418,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                     <div
                       className={`w-40 sm:w-full aspect-[2/3] max-w-[210px] rounded-lg shadow-lg bg-gradient-to-br ${
                         book.coverBg || 'from-[#2a2421] to-[#171412]'
-                      } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group ${book.samplerFor ? 'sampler-glow' : ''}`}
+                      } p-3.5 flex flex-col justify-between relative overflow-hidden select-none group ${book.samplerFor ? 'sampler-glow' : 'border border-white/10'}`}
                       style={glowVars}
                     >
                       {book.badge && (
@@ -454,7 +454,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       key={miniBook.id}
                       type="button"
                       onClick={() => toggleSwap(entry.id)}
-                      className={`sampler-swap-in absolute -right-7 sm:-right-4 -bottom-5 w-[42%] z-30 rounded-md block cursor-pointer active:scale-95 transition-transform ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl'}`}
+                      className={`sampler-swap-in absolute -right-7 sm:-right-4 -bottom-5 w-[42%] z-30 rounded-md block p-0 border-0 bg-transparent leading-[0] cursor-pointer active:scale-95 transition-transform`}
                       style={glowVars}
                       title={`Показать «${miniBook.title}»`}
                       aria-label={`Показать «${miniBook.title}»`}
@@ -463,11 +463,11 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                         <SmartCoverImage
                           src={miniBook.coverUrl}
                           alt={miniBook.title}
-                          className="w-full h-auto rounded-md border border-white/20 block"
+                          className={`w-full h-auto rounded-md block ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl border border-white/20'}`}
                           fallbackComponent={<div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'}`} />}
                         />
                       ) : (
-                        <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'} flex items-center justify-center p-1 text-center font-literata text-[9px] text-[#fffff0]`}>
+                        <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl'} ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'} flex items-center justify-center p-1 text-center font-literata text-[9px] text-[#fffff0]`}>
                           {miniBook.title}
                         </div>
                       )}
@@ -606,15 +606,6 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                     </p>
                   )}
 
-                  {/* A sampler says which book it opens the way to */}
-                  {book.samplerFor && findBook(book.samplerFor) && (
-                    <p
-                      className="text-[11px] sm:text-xs font-literata mb-3 -mt-1.5 inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full border"
-                      style={{ borderColor: glow, color: glow }}
-                    >
-                      Пробник: с неё можно начать «{findBook(book.samplerFor)!.title}»
-                    </p>
-                  )}
 
                   {/* Subtle Divider */}
                   {paragraphs.length > 0 && (
