@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { Book, Chapter, AppMode, PersistedState } from '../types';
+import { takeEditionRemap } from '../utils/catalogEditions';
 import { calculateTotalProgress } from '../utils/time';
 import { parseEpub, parseFb2 } from '../utils/ebook';
 import { getAudioDuration } from '../utils/audio';
@@ -442,6 +443,7 @@ export function useAppPersistence({
     }
 
     let bookToPlay = book;
+    let remapState: { chapterIndex: number; time: number } | null = null;
     setIsPlaying(false);
 
     let forceFormatAsFb2 = false;
@@ -584,6 +586,14 @@ export function useAppPersistence({
                     bookToPlay.archiveFiles = book.archiveFiles;
                 }
                 
+                // Just updated to a new edition: go back to the same chapter by its name
+                const remap = takeEditionRemap(book.id);
+                if (remap && injectedGlobalProgress === undefined) {
+                    const idx = remap.chapterName ? bookToPlay.chapters.findIndex(c => (c.name || '').trim() === remap.chapterName) : -1;
+                    if (idx >= 0) remapState = { chapterIndex: idx, time: remap.time || 0 };
+                    else if (typeof remap.total === 'number') injectedGlobalProgress = remap.total;
+                }
+
                 // A re-parse can change the chapter list (e.g. new heading rules), so the
                 // saved chapter index no longer points at the same place: restore by overall progress.
                 const savedTotal = (historyOverride || bookProgressMap)[book.id]?.totalProgress;
@@ -621,7 +631,9 @@ export function useAppPersistence({
     }
     
     const mapToUse = historyOverride || bookProgressMap;
-    const savedState = mapToUse[bookToPlay.id];
+    const savedState = remapState
+        ? { ...(mapToUse[bookToPlay.id] || { bookId: bookToPlay.id, rate: 1, lastUpdated: Date.now() }), ...remapState }
+        : mapToUse[bookToPlay.id];
     
     // Update ref early to ensure any progress updates from the "old" book during transition are ignored
     currentBookRef.current = bookToPlay;

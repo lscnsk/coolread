@@ -275,6 +275,21 @@ export const loadBookContent = async (book: { id: string; format?: string; chapt
   }
 };
 
+/** Forgets a book's saved chapter text (its file changed, so it is parsed again on open). */
+export const deleteBookContent = async (id: string): Promise<void> => {
+  try {
+    const db = await initDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(CONTENT_STORE, 'readwrite');
+      tx.objectStore(CONTENT_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Error deleting book content:", e);
+  }
+};
+
 /** Saves a book's library cover, or removes it when blob is null. */
 export const saveCoverToDB = async (id: string, blob: Blob | null): Promise<void> => {
   try {

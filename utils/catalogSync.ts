@@ -2,9 +2,9 @@ import { CatalogBook, CatalogSeries, CATALOG_BOOKS, CATALOG_SERIES, sortBooksChr
 
 const GITHUB_REPO_OWNER = 'lscnsk';
 const GITHUB_REPO_NAME = 'lscnsk_library';
-// v4: books carry sampler links; a v3 list saved before them is fetched again
-const CACHE_KEY = 'lscnsk_library_catalog_manifest_v4';
-const CACHE_TIME_KEY = 'lscnsk_library_last_sync_time_v4';
+// v5: books carry sampler links and editions; a list saved before them is fetched again
+const CACHE_KEY = 'lscnsk_library_catalog_manifest_v5';
+const CACHE_TIME_KEY = 'lscnsk_library_last_sync_time_v5';
 
 function formatBytes(bytes: number): string {
   if (!bytes || isNaN(bytes)) return '';
@@ -35,6 +35,8 @@ export function getStoredCatalogBooks(): CatalogBook[] {
     localStorage.removeItem('lscnsk_library_catalog_manifest_v2');
     localStorage.removeItem('lscnsk_library_catalog_manifest_v3');
     localStorage.removeItem('lscnsk_library_last_sync_time_v3');
+    localStorage.removeItem('lscnsk_library_catalog_manifest_v4');
+    localStorage.removeItem('lscnsk_library_last_sync_time_v4');
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
@@ -98,7 +100,7 @@ export function lastCatalogSyncTime(): number {
 type CatalogJsonBook = {
   id: string; filename: string; title: string; author: string; series?: string; seriesNumber?: number | string;
   year?: string; description?: string; cover?: string; size?: number; pageCount?: number; badge?: string;
-  sampler?: string; samplerFor?: string;
+  sampler?: string; samplerFor?: string; edition?: string;
 };
 
 /**
@@ -134,6 +136,8 @@ async function fetchCatalogJson(signal: AbortSignal): Promise<CatalogBook[] | nu
           badge: b.badge || undefined,
           sampler: b.sampler || undefined,
           samplerFor: b.samplerFor || undefined,
+          edition: b.edition || undefined,
+          sizeBytes: b.size || undefined,
         };
       });
     } catch {

@@ -37,6 +37,8 @@ import { CatalogBook, CatalogSeries, CATALOG_SERIES, sortBooksChronologically } 
 import { getStoredCatalogBooks, syncCatalogFromGitHub, lastCatalogSyncTime, downloadCatalogBookFile, buildCatalogSeriesFromBooks } from './utils/catalogSync';
 
 import { parseM4AChapters } from './utils/mp4chapters';
+import { findLibraryBook, hasNewEdition, rememberEdition, setEditionRemap } from './utils/catalogEditions';
+import { saveBookToDB, deleteBookContent, stripChapterContent } from './utils/db';
 
 
 function App() {
@@ -474,6 +476,7 @@ function App() {
         coverUrl: catalogBook.coverUrl,
         pageCount: catalogBook.pageCount
       });
+      rememberEdition(catalogBook.id, catalogBook.edition, file.size);
     } catch (err: any) {
       console.error("Error downloading book:", err);
     } finally {
@@ -482,6 +485,55 @@ function App() {
         next.delete(catalogBook.id);
         return next;
       });
+    }
+  };
+
+  // lscnsk books the reader has in an older edition than the catalog's: library book id -> catalog book
+  const [editionsTick, setEditionsTick] = useState(0);
+  const newEditions = React.useMemo(() => {
+    const map = new Map<string, CatalogBook>();
+    for (const cat of catalogBooks) {
+      const lib = findLibraryBook(cat, books);
+      if (lib && hasNewEdition(cat, lib)) map.set(lib.id, cat);
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogBooks, books, editionsTick]);
+
+  /**
+   * Replaces a downloaded lscnsk book with the catalog's new edition. The book keeps its id
+   * (so its progress and place in the library stay); the reader returns to the same chapter by name.
+   */
+  const handleUpdateCatalogBook = async (catalogBook: CatalogBook) => {
+    const lib = findLibraryBook(catalogBook, books);
+    if (!lib) return;
+    setDownloadingBookIds(prev => new Set(prev).add(catalogBook.id));
+    try {
+      const downloaded = await downloadCatalogBookFile(catalogBook);
+      const file = new File([downloaded], `${catalogBook.title}.fb2`, { type: 'application/x-fictionbook+xml', lastModified: Date.now() });
+      const progress = bookProgressMap[lib.id];
+      const openChapters = currentBook?.id === lib.id ? currentBook.chapters : lib.chapters;
+      if (progress) {
+        const chapterName = openChapters.length > 1 ? (openChapters[progress.chapterIndex]?.name || '').trim() : '';
+        setEditionRemap(lib.id, { chapterName: chapterName || undefined, time: progress.time, total: progress.totalProgress });
+      }
+      const updated: Book = {
+        ...stripChapterContent(lib),
+        file,
+        size: file.size,
+        chapters: [{ name: lib.title, path: lib.chapters[0]?.path || lib.id, file, url: '' }],
+        _sessionActive: false,
+      };
+      await deleteBookContent(lib.id);
+      await saveBookToDB(updated);
+      rememberEdition(catalogBook.id, catalogBook.edition, file.size);
+      setBooks(prev => prev.map(b => b.id === lib.id ? updated : b));
+      setEditionsTick(t => t + 1);
+      if (currentBook?.id === lib.id) await handleSelectBook(updated);
+    } catch (err) {
+      console.error('Error updating book:', err);
+    } finally {
+      setDownloadingBookIds(prev => { const next = new Set(prev); next.delete(catalogBook.id); return next; });
     }
   };
 
@@ -868,6 +920,9 @@ function App() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         bookProgressMap={bookProgressMap}
+        newEditionBookIds={newEditions}
+        onUpdateBook={(libId) => { const cat = newEditions.get(libId); if (cat) handleUpdateCatalogBook(cat); }}
+        updatingCatalogIds={downloadingBookIds}
         appStyle={appStyle}
         onAppStyleChange={handleAppStyleChange}
         currentBookFormat={currentBook?.format || null}
@@ -1029,6 +1084,8 @@ function App() {
               onResetFilter={() => setCatalogFilter({ type: 'all' })}
               onDownloadBook={handleDownloadCatalogBook}
               onReadBook={handleReadCatalogBook}
+              onUpdateBook={handleUpdateCatalogBook}
+              newEditionIds={new Set(Array.from(newEditions.values()).map(b => b.id))}
               downloadingIds={downloadingBookIds}
               appStyle={appStyle}
               isLoading={isCatalogSyncing}

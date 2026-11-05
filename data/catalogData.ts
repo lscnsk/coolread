@@ -25,6 +25,10 @@ export interface CatalogBook {
   sampler?: string;
   /** Id of the main book this one is the sampler of */
   samplerFor?: string;
+  /** Short hash of the book file in lscnsk_library; changes with every new edition */
+  edition?: string;
+  /** File size in bytes */
+  sizeBytes?: number;
 }
 
 export interface CatalogSeries {
