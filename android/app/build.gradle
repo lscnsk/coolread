@@ -14,8 +14,8 @@ android {
         applicationId "com.coolread.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 106
-        versionName "2.06"
+        versionCode 107
+        versionName "2.07"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // 64-bit phones only: the speech engine's native libraries are large
         ndk { abiFilters 'arm64-v8a' }

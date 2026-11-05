@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Type, Sun, Moon, Pilcrow, Zap, BookOpen, Scroll, Headphones } from 'lucide-react';
-import ReadAloudPanel from './ReadAloudPanel';
+import { ReadAloudSpeed, ReadAloudTransport } from './ReadAloudPanel';
 import { setOpen as setReadAloudOpen, useReadAloud } from '../utils/readAloud';
 import { Chapter } from '../types';
 
@@ -60,6 +60,8 @@ const EBookControls: React.FC<EBookControlsProps> = ({
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
   const readAloud = useReadAloud();
   const canReadAloud = currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && !isRsvpMode;
+  // While reading aloud, its controls take the place of the buttons left of the headphones
+  const voiceMode = canReadAloud && readAloud.open;
   const accentColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFF ? '#cca972' : '#fffff0';
 
   const adjustFont = (delta: number) => {
@@ -102,7 +104,6 @@ const EBookControls: React.FC<EBookControlsProps> = ({
 
   return (
     <>
-    {canReadAloud && <ReadAloudPanel appStyle={appStyle} visible={show && readAloud.open} barVisible={show} />}
     <div 
         className={`fixed bottom-0 left-0 right-0 w-full h-28 border-t pb-safe pt-3 px-4 z-30 shadow-[0_-5px_15px_rgba(0,0,0,0.15)] transition-transform duration-300 ease-in-out ${
             show ? 'translate-y-0' : 'translate-y-full'
@@ -112,11 +113,12 @@ const EBookControls: React.FC<EBookControlsProps> = ({
        <div className="max-w-4xl mx-auto w-full flex flex-col gap-3">
            
            {/* Top Row: Controls */}
-           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full gap-1 sm:gap-2">
+           <div className={`grid ${voiceMode ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'} items-center w-full gap-1 sm:gap-2`}>
                
                {/* Left Group: Font Controls */}
-               <div className="flex justify-start">
-                   {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
+               <div className="flex justify-start min-w-0">
+                   {voiceMode && <ReadAloudSpeed appStyle={appStyle} />}
+                   {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
                        <div className={`flex items-center gap-[1px] px-0.5 h-8 rounded-lg border flex-shrink-0 ${isMarcel ? 'bg-[#E8E0F5] border-[#C4B5E6]' : isBimbo ? 'bg-white border-[#FBCFE8]' : isSurf ? 'bg-sky-50 border-[#bae6fd]' : 'bg-[#2c2a28] border-[#45413e]'}`}>
                            <button 
                                onClick={() => adjustFont(-0.1)} 
@@ -141,7 +143,8 @@ const EBookControls: React.FC<EBookControlsProps> = ({
 
                {/* Center: Style Toggles (Clean Group) */}
                <div className="flex justify-center items-center gap-0 sm:gap-1">
-                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
+                  {voiceMode && <ReadAloudTransport appStyle={appStyle} />}
+                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
                     <button 
                       onClick={onToggleStyledMode}
                       className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
@@ -155,7 +158,7 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
+                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
                     <button 
                       onClick={onToggleTheme}
                       className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
@@ -169,7 +172,7 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleBionic && (
+                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleBionic && (
                     <button 
                       onClick={onToggleBionic}
                       className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all select-none text-[15px] ${
@@ -183,7 +186,7 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleRsvpMode && (
+                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleRsvpMode && (
                     <button 
                       onClick={onToggleRsvpMode}
                       className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
@@ -196,7 +199,7 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onTogglePagedMode && (
+                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onTogglePagedMode && (
                     <button 
                       onClick={onTogglePagedMode}
                       className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${

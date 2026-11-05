@@ -2645,7 +2645,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         const r = containerRef.current?.getBoundingClientRect();
         if (!r) return null;
         // Leave out the parts covered by the top bar (when it is shown) and by the bottom panel with the player
-        const top = Math.max(r.top + 8, visibleTop() + 2), bottom = r.bottom - (readAloudRef.current.uiVisible ? 190 : 40);
+        const top = Math.max(r.top + 8, visibleTop() + 2), bottom = r.bottom - (readAloudRef.current.uiVisible ? 125 : 40);
         return new DOMRect(r.left, top, r.width, Math.max(50, bottom - top));
       },
       paged: () => isPagedModeRef.current,
