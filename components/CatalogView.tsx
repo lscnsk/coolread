@@ -93,22 +93,18 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
 
   // Early access: a book can have a short sampler to start with (sampler in catalog.json).
-  // Tapping such a book first shows the sampler's card, with a soft glow, offering to start there.
-  const [samplerOffer, setSamplerOffer] = useState<{ main: CatalogBook; sampler: CatalogBook } | null>(null);
+  // Its card shows both covers: the main book large, the sampler small in the corner with a soft glow.
+  // Tapping the small cover swaps them, and the card then tells about that book.
+  const [swapped, setSwapped] = useState<Set<string>>(() => new Set());
   const findBook = (id?: string) => id ? (allBooks || books).find(b => b.id === id) || books.find(b => b.id === id) : undefined;
-  const openBook = (book: CatalogBook) => {
-    if (getMatchingLibraryBook(book)) { onReadBook(book); return; }
-    const sampler = findBook(book.sampler);
-    if (sampler && sampler.id !== book.id) { setSamplerOffer({ main: book, sampler }); return; }
-    onDownloadBook(book);
-  };
-  useEffect(() => {
-    if (!samplerOffer) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSamplerOffer(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [samplerOffer]);
-  const glow = isMarcel ? '#AC97D7' : isBimbo ? '#F472B6' : isSurf ? '#38BDF8' : isDragon ? '#f59e0b' : isFF ? '#dfc894' : '#e8c98a';
+  const toggleSwap = (mainId: string) => setSwapped(prev => {
+    const next = new Set(prev);
+    if (next.has(mainId)) next.delete(mainId); else next.add(mainId);
+    return next;
+  });
+  const glowColor = isMarcel ? '#AC97D7' : isBimbo ? '#F472B6' : isSurf ? '#38BDF8' : isDragon ? '#f59e0b' : isFF ? '#dfc894' : '#e8c98a';
+  const glow = glowColor;
+  const glowVars = { ['--glow' as any]: glowColor, ['--glow-soft' as any]: `${glowColor}99` } as React.CSSProperties;
 
   // --- AUTOMATIC MICRO-TYPOGRAPHY OPTIMIZATION FOR CATALOG ANNOTATIONS ---
   useEffect(() => {
@@ -339,7 +335,13 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
 
         {/* Books List: 2-column layout */}
         <div className="space-y-8 md:space-y-10">
-          {books.map((book) => {
+          {books.map((entry) => {
+            // A sampler shown together with its main book has no card of its own
+            if (entry.samplerFor && books.some(b => b.id === entry.samplerFor)) return null;
+            const pairedSampler = !entry.samplerFor ? findBook(entry.sampler) : undefined;
+            const isSwapped = Boolean(pairedSampler) && swapped.has(entry.id);
+            const book = isSwapped ? pairedSampler! : entry;
+            const miniBook = pairedSampler ? (isSwapped ? entry : pairedSampler) : undefined;
             const matchingLibBook = getMatchingLibraryBook(book);
             const onShelf = Boolean(matchingLibBook);
             const isDownloading = downloadingIds.has(book.id);
@@ -353,7 +355,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
 
             return (
               <article
-                key={book.id}
+                key={entry.id}
                 className={`rounded-xl p-5 md:p-6 transition-all grid grid-cols-1 sm:grid-cols-[200px_1fr] md:grid-cols-[230px_1fr] gap-6 md:gap-8 items-start ${
                   isMarcel
                     ? 'bg-white/85 border border-[#C4B5E6] shadow-sm hover:border-[#AC97D7]'
@@ -370,11 +372,13 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
               >
                 {/* COLUMN 1: COVER & DOWNLOAD/READ BUTTON */}
                 <div className="w-full flex flex-col items-center sm:items-start">
-                  {/* Book Cover */}
+                  {/* Book Cover, and the paired book's small cover in its corner */}
+                  <div className={`relative w-40 sm:w-full max-w-[210px] ${miniBook ? 'mb-5' : ''}`}>
+                  <div key={book.id} className={miniBook ? 'sampler-swap-in' : undefined}>
                   {book.coverUrl ? (
                     <div
-                      className={`relative w-40 sm:w-full max-w-[210px] h-auto select-none block ${book.sampler ? 'cursor-pointer' : ''}`}
-                      onClick={book.sampler ? () => openBook(book) : undefined}
+                      className={`relative w-40 sm:w-full max-w-[210px] h-auto select-none block rounded-lg ${book.samplerFor ? 'sampler-glow' : ''}`}
+                      style={glowVars}
                     >
                       {book.badge && (
                         <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
@@ -414,8 +418,8 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                     <div
                       className={`w-40 sm:w-full aspect-[2/3] max-w-[210px] rounded-lg shadow-lg bg-gradient-to-br ${
                         book.coverBg || 'from-[#2a2421] to-[#171412]'
-                      } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group ${book.sampler ? 'cursor-pointer' : ''}`}
-                      onClick={book.sampler ? () => openBook(book) : undefined}
+                      } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group ${book.samplerFor ? 'sampler-glow' : ''}`}
+                      style={glowVars}
                     >
                       {book.badge && (
                         <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
@@ -444,6 +448,32 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       </div>
                     </div>
                   )}
+                  </div>
+                  {miniBook && (
+                    <button
+                      key={miniBook.id}
+                      type="button"
+                      onClick={() => toggleSwap(entry.id)}
+                      className={`sampler-swap-in absolute -right-7 sm:-right-4 -bottom-5 w-[42%] z-30 rounded-md block cursor-pointer active:scale-95 transition-transform ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl'}`}
+                      style={glowVars}
+                      title={`Показать «${miniBook.title}»`}
+                      aria-label={`Показать «${miniBook.title}»`}
+                    >
+                      {miniBook.coverUrl ? (
+                        <SmartCoverImage
+                          src={miniBook.coverUrl}
+                          alt={miniBook.title}
+                          className="w-full h-auto rounded-md border border-white/20 block"
+                          fallbackComponent={<div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'}`} />}
+                        />
+                      ) : (
+                        <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'} flex items-center justify-center p-1 text-center font-literata text-[9px] text-[#fffff0]`}>
+                          {miniBook.title}
+                        </div>
+                      )}
+                    </button>
+                  )}
+                  </div>
 
                   {/* Action button below cover */}
                   <div className="w-40 sm:w-full max-w-[210px] mt-3.5 flex flex-col items-center gap-1.5">
@@ -470,7 +500,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       </button>
                     ) : (
                       <button
-                        onClick={() => openBook(book)}
+                        onClick={() => onDownloadBook(book)}
                         disabled={isDownloading}
                         className={`w-full py-2 px-3 rounded-lg font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
                           isDownloading
@@ -647,102 +677,6 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
         </div>
       </div>
 
-      {samplerOffer && (() => {
-        const { main, sampler } = samplerOffer;
-        const samplerOnShelf = Boolean(getMatchingLibraryBook(sampler));
-        const samplerPages = getApproximatePageCount(sampler);
-        const firstParagraph = (sampler.description || '').split(/\n\s*\n/)[0]?.trim() || '';
-        const light = isMarcel || isBimbo || isSurf;
-        const close = () => setSamplerOffer(null);
-        return (
-          <div
-            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={close}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Начать с «${sampler.title}»`}
-          >
-            <div className="w-full max-w-md max-h-full overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
-              {/* Caption offering the sampler */}
-              <div className="text-center mb-3 px-2 font-literata" style={{ color: glow }}>
-                <p className="text-base sm:text-lg font-bold tracking-wide">Попробуйте начать с этой книги</p>
-                <p className="text-xs sm:text-sm opacity-85 mt-0.5 text-[#fffff0]/85">
-                  Короткая книга, чтобы познакомиться с «{main.title}»
-                </p>
-              </div>
-
-              {/* The sampler's card, with a soft glow on its frame */}
-              <div
-                className={`sampler-glow relative rounded-xl p-4 sm:p-5 border ${
-                  isMarcel ? 'bg-white/95' : isBimbo ? 'bg-white/95' : isSurf ? 'bg-white/95'
-                  : isDragon ? 'bg-[#1a0f0d]' : isFF ? 'bg-[#061124]' : 'bg-[#2a2724]'
-                }`}
-                style={{ ['--glow' as any]: glow, ['--glow-soft' as any]: `${glow}99`, borderColor: glow }}
-              >
-                <button
-                  onClick={close}
-                  className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-lg leading-none opacity-60 hover:opacity-100 ${light ? 'text-stone-700' : 'text-[#fffff0]'}`}
-                  aria-label="Закрыть"
-                >
-                  ×
-                </button>
-                <div className="flex gap-4 items-start">
-                  <div className="w-24 sm:w-28 shrink-0">
-                    {sampler.coverUrl ? (
-                      <SmartCoverImage
-                        src={sampler.coverUrl}
-                        alt={sampler.title}
-                        className="w-full h-auto rounded-md shadow-lg border border-white/10 block"
-                        fallbackComponent={<div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${sampler.coverBg || 'from-[#2a2421] to-[#171412]'}`} />}
-                      />
-                    ) : (
-                      <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${sampler.coverBg || 'from-[#2a2421] to-[#171412]'}`} />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 pr-5">
-                    <h3 className={`font-literata font-bold text-lg leading-snug ${
-                      isMarcel ? 'text-[#2F2440]' : isBimbo ? 'text-[#881337]' : isSurf ? 'text-[#0C4A6E]'
-                      : isDragon ? 'text-[#fcd34d]' : isFF ? 'text-[#f0deba]' : 'text-[#fffff0]'
-                    }`}>{sampler.title}</h3>
-                    <p className={`font-literata italic text-sm mt-0.5 ${
-                      isMarcel ? 'text-[#766594]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0369A1]'
-                      : isDragon ? 'text-[#ea580c]' : isFF ? 'text-[#8faada]' : 'text-[#d6d3d1]'
-                    }`}>
-                      {sampler.author}{sampler.year ? ` (${sampler.year})` : ''}
-                    </p>
-                    <p className={`font-literata text-[11px] mt-1.5 ${light ? 'text-stone-500' : 'text-[#a8a29e]'}`}>
-                      {(sampler.format || 'FB2').toUpperCase()} • {sampler.fileSize}{samplerPages > 0 ? ` • ~${samplerPages} стр.` : ''}
-                    </p>
-                  </div>
-                </div>
-                {firstParagraph && (
-                  <p className={`font-literata text-xs sm:text-[13px] leading-[1.5] mt-3 line-clamp-6 text-justify ${
-                    isMarcel ? 'text-[#2F2440]/90' : isBimbo ? 'text-[#881337]/90' : isSurf ? 'text-[#0C4A6E]/90'
-                    : isDragon ? 'text-[#e8dcc8]/90' : isFF ? 'text-[#d0deef]/90' : 'text-[#d6d3d1]'
-                  }`} style={{ hyphens: 'auto', WebkitHyphens: 'auto' }}>
-                    {renderFormattedAnnotation(firstParagraph)}
-                  </p>
-                )}
-                <button
-                  onClick={() => { close(); samplerOnShelf ? onReadBook(sampler) : onDownloadBook(sampler); }}
-                  disabled={downloadingIds.has(sampler.id)}
-                  className="w-full mt-4 py-2.5 px-3 rounded-lg font-bold text-sm tracking-wide transition-all active:scale-95 shadow-sm"
-                  style={{ background: glow, color: light ? '#ffffff' : '#1c1917' }}
-                >
-                  {samplerOnShelf ? '📖 Читать' : '📥 Начать с этой книги'}
-                </button>
-              </div>
-
-              <button
-                onClick={() => { close(); onDownloadBook(main); }}
-                className="w-full mt-3 py-2 text-xs sm:text-sm font-literata underline underline-offset-2 text-[#fffff0]/80 hover:text-[#fffff0]"
-              >
-                Нет, сразу скачать «{main.title}»
-              </button>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 });
