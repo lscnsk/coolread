@@ -10,6 +10,7 @@ import android.media.PlaybackParams;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -137,9 +138,9 @@ final class Speaker implements PlaybackService.Controller {
                 applySpeed(track);
                 if (!paused) {
                     track.play();
-                    applySpeed(track);
+                    forceSpeed(track);
                     // and once more when it is really playing
-                    main.postDelayed(() -> { if (!cancelled && session == this) applySpeed(track); }, 250);
+                    main.postDelayed(() -> { if (!cancelled && session == this) forceSpeed(track); }, 300);
                 }
             });
         }
@@ -288,11 +289,54 @@ final class Speaker implements PlaybackService.Controller {
         return shared;
     }
 
-    /** Puts the speed back if the phone dropped it. */
-    private void keepSpeed(AudioTrack t) {
+    /**
+     * Sets the speed so that the phone really takes it: some phones keep a track that starts
+     * playing at normal speed while still reporting the set one, and ignore the same value set again.
+     * A different value first, then the right one, makes them apply it.
+     */
+    private void forceSpeed(AudioTrack t) {
         try {
-            if (Math.abs(t.getPlaybackParams().getSpeed() - speed) > 0.01f) applySpeed(t);
-        } catch (Exception ignored) {}
+            t.setPlaybackParams(new PlaybackParams().setSpeed(speed == 1f ? 1.05f : 1f).setPitch(1f));
+        } catch (Exception e) {
+            Log.w(TAG, "speed", e);
+        }
+        applySpeed(t);
+    }
+
+    private static final String TAG = "Speaker";
+
+    // The speed actually heard, measured from how fast the track plays its frames
+    private Session measured;
+    private long measureAt, measureHead;
+    private int fixes;
+
+    /** Called while playing: if the track plays at normal speed though another is set, sets it again. */
+    private void checkSpeed(Session s) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        long head;
+        try {
+            head = s.track.getPlaybackHeadPosition() & 0xffffffffL;
+        } catch (Exception e) {
+            return;
+        }
+        if (measured != s || head < measureHead) {
+            measured = s;
+            measureAt = now;
+            measureHead = head;
+            fixes = 0;
+            return;
+        }
+        long dt = now - measureAt;
+        if (dt < 900) return;
+        double rate = (head - measureHead) / (RATE * dt / 1000.0);
+        measureAt = now;
+        measureHead = head;
+        // Waiting for the voice gives a lower rate; exactly normal speed is the phone ignoring the setting
+        if (Math.abs(speed - 1f) >= 0.2f && Math.abs(rate - 1.0) < 0.07 && fixes < 5) {
+            fixes++;
+            Log.w(TAG, "plays at normal speed, setting " + speed + " again");
+            forceSpeed(s.track);
+        }
     }
 
     private void applySpeed(AudioTrack t) {
@@ -351,7 +395,9 @@ final class Speaker implements PlaybackService.Controller {
         paused = false;
         requestFocus();
         session.track.play();
-        applySpeed(session.track); // some phones drop the speed after a pause
+        forceSpeed(session.track); // some phones drop the speed after a pause
+        Session s = session;
+        main.postDelayed(() -> { if (session == s && !paused) forceSpeed(s.track); }, 300);
         state("playing");
     }
 
@@ -441,7 +487,6 @@ final class Speaker implements PlaybackService.Controller {
     }
 
     /** Follows the track: which sentence and word are heard now. */
-    private int ticks;
     private final Runnable monitor = new Runnable() {
         @Override
         public void run() {
@@ -470,7 +515,8 @@ final class Speaker implements PlaybackService.Controller {
                 // Waiting for the voice (or for the next chapter)
                 state("loading");
             }
-            if (!paused && ++ticks % 8 == 0) keepSpeed(s.track);
+            if (!paused && "playing".equals(lastState)) checkSpeed(s);
+            else measured = null;
             if (s.finished()) {
                 endSession();
                 abandonFocus();
