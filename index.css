@@ -934,3 +934,13 @@ button, [role="button"], a {
 
 
 
+
+/* Early access: the glow on the frame of a sampler's card */
+@keyframes sampler-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--glow), 0 0 8px 0 var(--glow-soft); }
+  50% { box-shadow: 0 0 0 1px var(--glow), 0 0 20px 3px var(--glow-soft); }
+}
+.sampler-glow { animation: sampler-glow-pulse 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .sampler-glow { animation: none; box-shadow: 0 0 0 1px var(--glow), 0 0 14px 1px var(--glow-soft); }
+}

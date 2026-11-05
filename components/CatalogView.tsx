@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { CatalogBook, formatTypography, getApproximatePageCount } from '../data/catalogData';
 import { Book } from '../types';
@@ -6,6 +6,8 @@ import { SmartCoverImage } from './SmartCoverImage';
 
 interface CatalogViewProps {
   books: CatalogBook[];
+  /** The whole catalog, unfiltered: a sampler is found here even when a filter hides it */
+  allBooks?: CatalogBook[];
   libraryBooks: Book[];
   currentFilter: {
     type: 'all' | 'series' | 'author';
@@ -59,6 +61,7 @@ function renderFormattedAnnotation(text: string): React.ReactNode {
 
 export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   books,
+  allBooks,
   libraryBooks,
   currentFilter,
   onResetFilter,
@@ -88,6 +91,24 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   const isMarcel = appStyle === 'Marcel';
   const isDragon = appStyle === 'Dragon';
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
+
+  // Early access: a book can have a short sampler to start with (sampler in catalog.json).
+  // Tapping such a book first shows the sampler's card, with a soft glow, offering to start there.
+  const [samplerOffer, setSamplerOffer] = useState<{ main: CatalogBook; sampler: CatalogBook } | null>(null);
+  const findBook = (id?: string) => id ? (allBooks || books).find(b => b.id === id) || books.find(b => b.id === id) : undefined;
+  const openBook = (book: CatalogBook) => {
+    if (getMatchingLibraryBook(book)) { onReadBook(book); return; }
+    const sampler = findBook(book.sampler);
+    if (sampler && sampler.id !== book.id) { setSamplerOffer({ main: book, sampler }); return; }
+    onDownloadBook(book);
+  };
+  useEffect(() => {
+    if (!samplerOffer) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSamplerOffer(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [samplerOffer]);
+  const glow = isMarcel ? '#AC97D7' : isBimbo ? '#F472B6' : isSurf ? '#38BDF8' : isDragon ? '#f59e0b' : isFF ? '#dfc894' : '#e8c98a';
 
   // --- AUTOMATIC MICRO-TYPOGRAPHY OPTIMIZATION FOR CATALOG ANNOTATIONS ---
   useEffect(() => {
@@ -351,7 +372,10 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                 <div className="w-full flex flex-col items-center sm:items-start">
                   {/* Book Cover */}
                   {book.coverUrl ? (
-                    <div className="relative w-40 sm:w-full max-w-[210px] h-auto select-none block">
+                    <div
+                      className={`relative w-40 sm:w-full max-w-[210px] h-auto select-none block ${book.sampler ? 'cursor-pointer' : ''}`}
+                      onClick={book.sampler ? () => openBook(book) : undefined}
+                    >
                       {book.badge && (
                         <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
                           {book.badge}
@@ -390,7 +414,8 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                     <div
                       className={`w-40 sm:w-full aspect-[2/3] max-w-[210px] rounded-lg shadow-lg bg-gradient-to-br ${
                         book.coverBg || 'from-[#2a2421] to-[#171412]'
-                      } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group`}
+                      } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group ${book.sampler ? 'cursor-pointer' : ''}`}
+                      onClick={book.sampler ? () => openBook(book) : undefined}
                     >
                       {book.badge && (
                         <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
@@ -445,7 +470,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       </button>
                     ) : (
                       <button
-                        onClick={() => onDownloadBook(book)}
+                        onClick={() => openBook(book)}
                         disabled={isDownloading}
                         className={`w-full py-2 px-3 rounded-lg font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
                           isDownloading
@@ -551,6 +576,16 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                     </p>
                   )}
 
+                  {/* A sampler says which book it opens the way to */}
+                  {book.samplerFor && findBook(book.samplerFor) && (
+                    <p
+                      className="text-[11px] sm:text-xs font-literata mb-3 -mt-1.5 inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full border"
+                      style={{ borderColor: glow, color: glow }}
+                    >
+                      Пробник: с неё можно начать «{findBook(book.samplerFor)!.title}»
+                    </p>
+                  )}
+
                   {/* Subtle Divider */}
                   {paragraphs.length > 0 && (
                     <div
@@ -611,6 +646,103 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
           })}
         </div>
       </div>
+
+      {samplerOffer && (() => {
+        const { main, sampler } = samplerOffer;
+        const samplerOnShelf = Boolean(getMatchingLibraryBook(sampler));
+        const samplerPages = getApproximatePageCount(sampler);
+        const firstParagraph = (sampler.description || '').split(/\n\s*\n/)[0]?.trim() || '';
+        const light = isMarcel || isBimbo || isSurf;
+        const close = () => setSamplerOffer(null);
+        return (
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={close}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Начать с «${sampler.title}»`}
+          >
+            <div className="w-full max-w-md max-h-full overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
+              {/* Caption offering the sampler */}
+              <div className="text-center mb-3 px-2 font-literata" style={{ color: glow }}>
+                <p className="text-base sm:text-lg font-bold tracking-wide">Попробуйте начать с этой книги</p>
+                <p className="text-xs sm:text-sm opacity-85 mt-0.5 text-[#fffff0]/85">
+                  Короткая книга, чтобы познакомиться с «{main.title}»
+                </p>
+              </div>
+
+              {/* The sampler's card, with a soft glow on its frame */}
+              <div
+                className={`sampler-glow relative rounded-xl p-4 sm:p-5 border ${
+                  isMarcel ? 'bg-white/95' : isBimbo ? 'bg-white/95' : isSurf ? 'bg-white/95'
+                  : isDragon ? 'bg-[#1a0f0d]' : isFF ? 'bg-[#061124]' : 'bg-[#2a2724]'
+                }`}
+                style={{ ['--glow' as any]: glow, ['--glow-soft' as any]: `${glow}99`, borderColor: glow }}
+              >
+                <button
+                  onClick={close}
+                  className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-lg leading-none opacity-60 hover:opacity-100 ${light ? 'text-stone-700' : 'text-[#fffff0]'}`}
+                  aria-label="Закрыть"
+                >
+                  ×
+                </button>
+                <div className="flex gap-4 items-start">
+                  <div className="w-24 sm:w-28 shrink-0">
+                    {sampler.coverUrl ? (
+                      <SmartCoverImage
+                        src={sampler.coverUrl}
+                        alt={sampler.title}
+                        className="w-full h-auto rounded-md shadow-lg border border-white/10 block"
+                        fallbackComponent={<div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${sampler.coverBg || 'from-[#2a2421] to-[#171412]'}`} />}
+                      />
+                    ) : (
+                      <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${sampler.coverBg || 'from-[#2a2421] to-[#171412]'}`} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 pr-5">
+                    <h3 className={`font-literata font-bold text-lg leading-snug ${
+                      isMarcel ? 'text-[#2F2440]' : isBimbo ? 'text-[#881337]' : isSurf ? 'text-[#0C4A6E]'
+                      : isDragon ? 'text-[#fcd34d]' : isFF ? 'text-[#f0deba]' : 'text-[#fffff0]'
+                    }`}>{sampler.title}</h3>
+                    <p className={`font-literata italic text-sm mt-0.5 ${
+                      isMarcel ? 'text-[#766594]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0369A1]'
+                      : isDragon ? 'text-[#ea580c]' : isFF ? 'text-[#8faada]' : 'text-[#d6d3d1]'
+                    }`}>
+                      {sampler.author}{sampler.year ? ` (${sampler.year})` : ''}
+                    </p>
+                    <p className={`font-literata text-[11px] mt-1.5 ${light ? 'text-stone-500' : 'text-[#a8a29e]'}`}>
+                      {(sampler.format || 'FB2').toUpperCase()} • {sampler.fileSize}{samplerPages > 0 ? ` • ~${samplerPages} стр.` : ''}
+                    </p>
+                  </div>
+                </div>
+                {firstParagraph && (
+                  <p className={`font-literata text-xs sm:text-[13px] leading-[1.5] mt-3 line-clamp-6 text-justify ${
+                    isMarcel ? 'text-[#2F2440]/90' : isBimbo ? 'text-[#881337]/90' : isSurf ? 'text-[#0C4A6E]/90'
+                    : isDragon ? 'text-[#e8dcc8]/90' : isFF ? 'text-[#d0deef]/90' : 'text-[#d6d3d1]'
+                  }`} style={{ hyphens: 'auto', WebkitHyphens: 'auto' }}>
+                    {renderFormattedAnnotation(firstParagraph)}
+                  </p>
+                )}
+                <button
+                  onClick={() => { close(); samplerOnShelf ? onReadBook(sampler) : onDownloadBook(sampler); }}
+                  disabled={downloadingIds.has(sampler.id)}
+                  className="w-full mt-4 py-2.5 px-3 rounded-lg font-bold text-sm tracking-wide transition-all active:scale-95 shadow-sm"
+                  style={{ background: glow, color: light ? '#ffffff' : '#1c1917' }}
+                >
+                  {samplerOnShelf ? '📖 Читать' : '📥 Начать с этой книги'}
+                </button>
+              </div>
+
+              <button
+                onClick={() => { close(); onDownloadBook(main); }}
+                className="w-full mt-3 py-2 text-xs sm:text-sm font-literata underline underline-offset-2 text-[#fffff0]/80 hover:text-[#fffff0]"
+              >
+                Нет, сразу скачать «{main.title}»
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 });

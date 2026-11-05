@@ -23,3 +23,16 @@ describe('lscnsk catalog', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('early access samplers', () => {
+  it('keeps the link between a book and its sampler', async () => {
+    const data = JSON.parse(catalog);
+    data.books[0] = { ...data.books[0], sampler: 'ff' };
+    data.books.push({ id: 'ff', filename: 'ff.fb2', title: 'Флэпперы и философы', author: 'Ф. Скотт Фицджеральд', year: '1920', samplerFor: data.books[0].id });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(data), { status: 200 })));
+    const { books } = await syncCatalogFromGitHub();
+    expect(books.find(b => b.id === data.books[0].id)!.sampler).toBe('ff');
+    expect(books.find(b => b.id === 'ff')!.samplerFor).toBe(data.books[0].id);
+    vi.unstubAllGlobals();
+  });
+});

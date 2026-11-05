@@ -21,6 +21,10 @@ export interface CatalogBook {
   pageCount?: number;
   /** A short label over the cover, e.g. "На вычитке" (badges.json in lscnsk_library) */
   badge?: string;
+  /** Id of a short book to start with; the app offers it before this one (samplers.json in lscnsk_library) */
+  sampler?: string;
+  /** Id of the main book this one is the sampler of */
+  samplerFor?: string;
 }
 
 export interface CatalogSeries {
@@ -115,11 +119,30 @@ export const CATALOG_SERIES: CatalogSeries[] = [
 // The books shown before the first refresh; the live list is catalog.json in lscnsk_library
 export const CATALOG_BOOKS: CatalogBook[] = [
   {
+    id: "ff",
+    samplerFor: 'fr',
+    filename: "ff.fb2",
+    title: "Флэпперы и философы",
+    author: "Ф. Скотт Фицджеральд",
+    series: "Далекая Республика",
+    year: "1920",
+    description: "«Флэпперы и философы» (1920) — первый сборник рассказов Фрэнсиса Скотта Фицджеральда, вышедший через полгода после романа «По эту сторону рая». В него вошли восемь рассказов 1919–1920 годов: «Прибрежный пират», «Ледяной дворец», «Голова и плечи», «Хрустальная чаша», «Бернис коротко стрижется», «Благословение», «Дэлиримпл сбивается с пути» и «Четыре кулака». Сборник дан в авторском составе и порядке.\n\nФлэпперы — стриженые, независимые и насмешливые девушки послевоенной Америки — и молодые люди, рассуждающие о жизни, стали героями эпохи, которую Фицджеральд вскоре назовет веком джаза. Южанка на севере, бойкая дебютантка, наставляющая скромную кузину, профессор-вундеркинд и хористка, своенравная наследница на захваченной яхте — в этих рассказах уже звучат главные темы писателя: молодость, деньги, любовь и цена успеха.",
+    coverBg: 'from-[#2a2421] to-[#171412]',
+    coverTextColor: '#fffff0',
+    coverUrl: 'https://raw.githubusercontent.com/lscnsk/lscnsk_library/main/covers/ff.jpg',
+    downloadUrl: 'https://raw.githubusercontent.com/lscnsk/lscnsk_library/main/ff.fb2',
+    fallbackUrl: 'https://cdn.jsdelivr.net/gh/lscnsk/lscnsk_library@main/ff.fb2',
+    fileSize: '857.4 КБ',
+    format: 'fb2',
+    pageCount: 185
+  },
+  {
     id: "fr",
     badge: 'На вычитке',
+    sampler: 'ff',
     filename: "fr.fb2",
     title: "По эту сторону рая",
-    author: "Фрэнсис Фицджеральд",
+    author: "Ф. Скотт Фицджеральд",
     series: "Далекая Республика",
     year: "1917–1925",
     description: "В книгу вошла ранняя проза Фрэнсиса Скотта Фицджеральда 1917–1925 годов: романы «По эту сторону рая» (1920) и «Прекрасные и обреченные» (1922), сборники рассказов «Флэпперы и философы» (1920) и «Сказки века джаза» (1922), сатирическая комедия «Овощ, или Из президентов в почтальоны» (1923), его единственная опубликованная пьеса, а также рассказы тех лет, не вошедшие в авторские сборники. Тексты расположены в хронологическом порядке. Сборники даны в авторском составе, «Сказки века джаза» — с комментариями Фицджеральда к каждому рассказу. Роман «По эту сторону рая» сопровождают авторское «Извинение», автоинтервью и автобиографический очерк 1920 года, в разделе 1922 года помещен очерк «Что я думаю и чувствую в двадцать пять». Завершают книгу четыре очерка 1927–1937 годов, в которых Фицджеральд вспоминает Принстон, Нью-Йорк и век джаза: «Принстон», «Отзвуки века джаза», «Мой потерянный город» и «Ранний успех».",
@@ -128,9 +151,9 @@ export const CATALOG_BOOKS: CatalogBook[] = [
     coverUrl: 'https://raw.githubusercontent.com/lscnsk/lscnsk_library/main/covers/fr.jpg',
     downloadUrl: 'https://raw.githubusercontent.com/lscnsk/lscnsk_library/main/fr.fb2',
     fallbackUrl: 'https://cdn.jsdelivr.net/gh/lscnsk/lscnsk_library@main/fr.fb2',
-    fileSize: '5.1 МБ',
+    fileSize: '5.9 МБ',
     format: 'fb2',
-    pageCount: 1425
+    pageCount: 1693
   },
   {
     id: "jk",

@@ -1023,6 +1023,7 @@ function App() {
           ) : isCatalogOpen ? (
             <CatalogView
               books={filteredCatalogBooks}
+              allBooks={catalogBooks}
               libraryBooks={activeBooks}
               currentFilter={catalogFilter}
               onResetFilter={() => setCatalogFilter({ type: 'all' })}
