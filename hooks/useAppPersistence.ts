@@ -385,23 +385,22 @@ export function useAppPersistence({
 
 
   // --- Book Selection Logic ---
-  // Cleanup Blob URLs when currentBook changes to prevent memory leaks
+  // Free the picture Blob URLs inside a book's text once another book is opened.
+  // Only when the book itself changes: an update of the same book (new chapters, a new
+  // look after a style change) keeps using them. The cover is never revoked: the same URL
+  // is the book's cover in the library list, and revoking it left an empty cover there.
+  const openedBookRef = useRef<Book | null>(null);
   useEffect(() => {
-    return () => {
-        if (currentBook && currentBook.type === 'ebook') {
-            currentBook.chapters.forEach(ch => {
-                if (ch.content) {
-                    const matches = ch.content.match(/blob:(https?|capacitor|localhost)[^\s"']+/g);
-                    if (matches) {
-                        matches.forEach(url => URL.revokeObjectURL(url));
-                    }
-                }
-            });
-            if (currentBook.coverUrl && currentBook.coverUrl.startsWith('blob:')) {
-                URL.revokeObjectURL(currentBook.coverUrl);
-            }
-        }
-    };
+    const prev = openedBookRef.current;
+    openedBookRef.current = currentBook;
+    if (!prev || prev.type !== 'ebook' || prev.id === currentBook?.id) return;
+    const stillUsed = new Set<string>();
+    (currentBook?.chapters || []).forEach(ch => (ch.content?.match(/blob:(https?|capacitor|localhost)[^\s"']+/g) || []).forEach(u => stillUsed.add(u)));
+    prev.chapters.forEach(ch => {
+      (ch.content?.match(/blob:(https?|capacitor|localhost)[^\s"']+/g) || []).forEach(url => {
+        if (!stillUsed.has(url) && url !== prev.coverUrl) URL.revokeObjectURL(url);
+      });
+    });
   }, [currentBook]);
 
   const handleSelectBook = async (

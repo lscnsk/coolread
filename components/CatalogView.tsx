@@ -104,6 +104,13 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   });
   const glowColor = isMarcel ? '#AC97D7' : isBimbo ? '#F472B6' : isSurf ? '#38BDF8' : isDragon ? '#f59e0b' : isFF ? '#dfc894' : '#e8c98a';
   const glow = glowColor;
+  // Placeholder covers (books without a cover image) and the "На вычитке" label, in the app style's colours
+  const ph = isMarcel ? { bg: 'from-[#E8E0F5] to-[#C4B5E6]', text: '#2F2440', badge: 'bg-[#544372] text-white' }
+    : isBimbo ? { bg: 'from-[#FCE7F3] to-[#F9A8D4]', text: '#881337', badge: 'bg-[#BE123C] text-white' }
+    : isSurf ? { bg: 'from-[#E0F2FE] to-[#7DD3FC]', text: '#0C4A6E', badge: 'bg-[#0284C7] text-white' }
+    : isDragon ? { bg: 'from-[#450a0a] to-[#1a0f0d]', text: '#fcd34d', badge: 'bg-[#7f1d1d] text-[#fcd34d] border border-[#b45309]/60' }
+    : isFF ? { bg: 'from-[#17335e] to-[#061124]', text: '#dfc894', badge: 'bg-[#0b1d3a] text-[#dfc894] border border-[#dfc894]/60' }
+    : { bg: 'from-[#2a2421] to-[#171412]', text: '#fffff0', badge: 'bg-black/70 text-[#fffff0]' };
   const glowVars = { ['--glow' as any]: glowColor, ['--glow-soft' as any]: `${glowColor}99` } as React.CSSProperties;
 
   // --- AUTOMATIC MICRO-TYPOGRAPHY OPTIMIZATION FOR CATALOG ANNOTATIONS ---
@@ -381,7 +388,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       style={glowVars}
                     >
                       {book.badge && (
-                        <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
+                        <span className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full ${ph.badge} text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none`}>
                           {book.badge}
                         </span>
                       )}
@@ -392,22 +399,22 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                         fallbackComponent={
                           <div
                             className={`w-full aspect-[2/3] rounded-lg shadow-lg bg-gradient-to-br ${
-                              book.coverBg || 'from-[#2a2421] to-[#171412]'
+                              ph.bg
                             } p-3.5 flex flex-col justify-between relative border border-white/10 overflow-hidden select-none group`}
                           >
                             <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-gradient-to-r from-white/20 via-white/5 to-transparent pointer-events-none z-10" />
                             <div className="text-center my-auto space-y-1 px-1">
                               <h3
                                 className="font-literata font-bold text-xs sm:text-sm md:text-base leading-snug line-clamp-3"
-                                style={{ color: book.coverTextColor || '#fffff0' }}
+                                style={{ color: ph.text }}
                               >
                                 {book.title}
                               </h3>
-                              <p className="font-literata italic text-[11px] sm:text-xs opacity-75 text-[#fffff0]">
+                              <p className="font-literata italic text-[11px] sm:text-xs opacity-75" style={{ color: ph.text }}>
                                 {book.author}
                               </p>
                             </div>
-                            <div className="text-center border-t border-white/10 pt-1.5 flex items-center justify-center font-mono text-[9px] opacity-60 text-[#fffff0]">
+                            <div className="text-center border-t pt-1.5 flex items-center justify-center font-mono text-[9px] opacity-60" style={{ color: ph.text, borderColor: `${ph.text}33` }}>
                               <span className="font-bold tracking-widest uppercase">lscnsk</span>
                             </div>
                           </div>
@@ -417,12 +424,12 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                   ) : (
                     <div
                       className={`w-40 sm:w-full aspect-[2/3] max-w-[210px] rounded-lg shadow-lg bg-gradient-to-br ${
-                        book.coverBg || 'from-[#2a2421] to-[#171412]'
+                        ph.bg
                       } p-3.5 flex flex-col justify-between relative overflow-hidden select-none group ${book.samplerFor ? 'sampler-glow' : 'border border-white/10'}`}
                       style={glowVars}
                     >
                       {book.badge && (
-                        <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-black/70 text-[#fffff0] text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none">
+                        <span className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full ${ph.badge} text-[10px] font-literata tracking-wide shadow-md pointer-events-none select-none`}>
                           {book.badge}
                         </span>
                       )}
@@ -433,17 +440,17 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       <div className="text-center my-auto space-y-1 px-1">
                         <h3
                           className="font-literata font-bold text-xs sm:text-sm md:text-base leading-snug line-clamp-3"
-                          style={{ color: book.coverTextColor || '#fffff0' }}
+                          style={{ color: ph.text }}
                         >
                           {book.title}
                         </h3>
-                        <p className="font-literata italic text-[11px] sm:text-xs opacity-75 text-[#fffff0]">
+                        <p className="font-literata italic text-[11px] sm:text-xs opacity-75" style={{ color: ph.text }}>
                           {book.author}
                         </p>
                       </div>
 
                       {/* Cover Footer */}
-                      <div className="text-center border-t border-white/10 pt-1.5 flex items-center justify-center font-mono text-[9px] opacity-60 text-[#fffff0]">
+                      <div className="text-center border-t pt-1.5 flex items-center justify-center font-mono text-[9px] opacity-60" style={{ color: ph.text, borderColor: `${ph.text}33` }}>
                         <span className="font-bold tracking-widest uppercase">lscnsk</span>
                       </div>
                     </div>
@@ -464,10 +471,10 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                           src={miniBook.coverUrl}
                           alt={miniBook.title}
                           className={`w-full h-auto rounded-md block ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl border border-white/20'}`}
-                          fallbackComponent={<div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'}`} />}
+                          fallbackComponent={<div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${ph.bg}`} />}
                         />
                       ) : (
-                        <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl'} ${miniBook.coverBg || 'from-[#2a2421] to-[#171412]'} flex items-center justify-center p-1 text-center font-literata text-[9px] text-[#fffff0]`}>
+                        <div className={`w-full aspect-[2/3] rounded-md bg-gradient-to-br ${miniBook.samplerFor ? 'sampler-glow' : 'shadow-xl'} ${ph.bg} flex items-center justify-center p-1 text-center font-literata text-[9px]`} style={{ color: ph.text }}>
                           {miniBook.title}
                         </div>
                       )}

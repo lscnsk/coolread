@@ -113,7 +113,14 @@ const EBookControls: React.FC<EBookControlsProps> = ({
        <div className="max-w-4xl mx-auto w-full flex flex-col gap-3">
            
            {/* Top Row: Controls */}
-           <div className={`grid ${voiceMode ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'} items-center w-full gap-1 sm:gap-2`}>
+           {/* While reading aloud the buttons left of the headphones step aside (keeping their room),
+               so the headphones stay where they were and play sits in the middle of the row */}
+           <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full gap-1 sm:gap-2">
+               {voiceMode && (
+                 <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 z-10 flex items-center">
+                   <ReadAloudTransport appStyle={appStyle} />
+                 </div>
+               )}
                
                {/* Left Group: Font Controls */}
                <div className="flex justify-start min-w-0">
@@ -143,11 +150,10 @@ const EBookControls: React.FC<EBookControlsProps> = ({
 
                {/* Center: Style Toggles (Clean Group) */}
                <div className="flex justify-center items-center gap-0 sm:gap-1">
-                  {voiceMode && <ReadAloudTransport appStyle={appStyle} />}
-                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
+                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
                     <button 
                       onClick={onToggleStyledMode}
-                      className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
+                      className={`${voiceMode ? 'invisible' : ''} w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
                         isStyledMode 
                           ? (isMarcel ? 'text-red-700' : isBimbo ? 'text-red-600' : isSurf ? 'text-red-600' : 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.7)]') 
                           : (isMarcel ? 'text-[#2F2440]/40 hover:text-[#2F2440]/70' : isBimbo ? 'text-[#BE123C]/40 hover:text-[#BE123C]/70' : isSurf ? 'text-[#7dd3fc] hover:text-[#0ea5e9]' : 'text-[#888] hover:text-[#fffff0]/70')
@@ -158,10 +164,10 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
+                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && (
                     <button 
                       onClick={onToggleTheme}
-                      className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
+                      className={`${voiceMode ? 'invisible' : ''} w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
                         theme === 'light' 
                           ? (isMarcel ? 'text-[#b45309]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284c7]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]') 
                           : (isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284c7]' : 'text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.6)]')
@@ -172,10 +178,10 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleBionic && (
+                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleBionic && (
                     <button 
                       onClick={onToggleBionic}
-                      className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all select-none text-[15px] ${
+                      className={`${voiceMode ? 'invisible' : ''} w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all select-none text-[15px] ${
                         isBionic 
                           ? `font-black ${isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284c7]' : 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.6)]'}` 
                           : `font-normal ${isMarcel ? 'text-[#2F2440]/40 hover:text-[#2F2440]/70' : isBimbo ? 'text-[#BE123C]/40 hover:text-[#BE123C]/70' : isSurf ? 'text-[#7dd3fc] hover:text-[#0ea5e9]' : 'text-[#888] hover:text-[#fffff0]/70'}`
@@ -186,10 +192,10 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleRsvpMode && (
+                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onToggleRsvpMode && (
                     <button 
                       onClick={onToggleRsvpMode}
-                      className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
+                      className={`${voiceMode ? 'invisible' : ''} w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
                         isRsvpMode ? (isMarcel ? 'text-[#b45309]' : isBimbo ? 'text-[#db2777]' : isSurf ? 'text-[#0284c7]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]') 
                           : (isMarcel ? 'text-[#2F2440]/40 hover:text-[#2F2440]/70' : isBimbo ? 'text-[#BE123C]/40 hover:text-[#BE123C]/70' : isSurf ? 'text-[#7dd3fc] hover:text-[#0ea5e9]' : 'text-[#888] hover:text-[#fffff0]/70')
                       }`}
@@ -199,10 +205,10 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                     </button>
                   )}
 
-                  {!voiceMode && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onTogglePagedMode && (
+                  {currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && onTogglePagedMode && (
                     <button 
                       onClick={onTogglePagedMode}
-                      className={`w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
+                      className={`${voiceMode ? 'invisible' : ''} w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all ${
                         isPagedMode ? (isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284c7]' : 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]') 
                           : (isMarcel ? 'text-[#2F2440]/40 hover:text-[#2F2440]/70' : isBimbo ? 'text-[#BE123C]/40 hover:text-[#BE123C]/70' : isSurf ? 'text-[#7dd3fc] hover:text-[#0ea5e9]' : 'text-[#888] hover:text-[#fffff0]/70')
                       }`}

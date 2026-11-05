@@ -34,7 +34,7 @@ export const ReadAloudTransport: React.FC<{ appStyle?: string }> = ({ appStyle }
   const st = useReadAloud();
   const palette = playerPalette(appStyle);
   return (
-    <div className="flex items-center gap-2.5 mr-1.5">
+    <div className="flex items-center gap-2.5">
       <button onClick={() => skip(-1)} className="active:scale-95 transform" style={{ color: palette.control }} aria-label="Previous sentence">
         <SkipBack className="w-[18px] h-[18px] fill-current" />
       </button>
