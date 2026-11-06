@@ -100,5 +100,7 @@ export function addToHomeScreen(): void {
 
 // The full version (read aloud, az.lib.ru, built-in browser) is an Android app in RuStore
 export const RUSTORE_URL = 'https://www.rustore.ru/catalog/app/com.coolread.app';
+// The APK attached as CoolRead.apk to the latest GitHub release of this repository
+export const APK_URL = 'https://github.com/lscnsk/coolread/releases/latest/download/CoolRead.apk';
 // Offered everywhere except iPhone, iPad and Mac, where it cannot be installed
 export const offerFullVersion = (): boolean => isLite && !['ios', 'macos'].includes(tg()?.platform || '');
