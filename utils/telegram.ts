@@ -23,6 +23,10 @@ interface TgWebApp {
   setBackgroundColor?(color: string): void;
   setBottomBarColor?(color: string): void;
   openLink(url: string): void;
+  addToHomeScreen?(): void;
+  checkHomeScreenStatus?(cb: (status: string) => void): void;
+  onEvent(event: string, cb: () => void): void;
+  offEvent(event: string, cb: () => void): void;
   BackButton: TgBackButton;
 }
 
@@ -75,4 +79,20 @@ export function openTelegramLink(url: string): boolean {
   if (!app) return false;
   safe(() => app.openLink(url));
   return true;
+}
+
+// An icon on the phone's home screen that opens the app (Telegram 8.0+, Android and iOS).
+// The status is "added", "missed" (not added yet), "unknown" or "unsupported".
+export function watchHomeScreen(onStatus: (status: string) => void): () => void {
+  const app = tg();
+  if (!app || !app.isVersionAtLeast('8.0') || !app.checkHomeScreenStatus) { onStatus('unsupported'); return () => {}; }
+  safe(() => app.checkHomeScreenStatus!(onStatus));
+  const added = () => onStatus('added');
+  safe(() => app.onEvent('homeScreenAdded', added));
+  return () => safe(() => app.offEvent('homeScreenAdded', added));
+}
+
+export function addToHomeScreen(): void {
+  const app = tg();
+  if (app?.addToHomeScreen) safe(() => app.addToHomeScreen!());
 }
