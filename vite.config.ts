@@ -68,9 +68,30 @@ const webPwa = (): Plugin => ({
   },
 });
 
+// Lite version for Telegram (Mini App), built with `npm run build:telegram` into dist-telegram/.
+// The web version without read aloud; Telegram's script gives the back button and colours.
+// No service worker: Telegram needs the internet to open the app anyway.
+const isTelegram = process.env.VITE_TARGET === 'telegram';
+const telegramLite = (): Plugin => ({
+  name: 'telegram-lite',
+  apply: 'build',
+  transformIndexHtml(html) {
+    if (!isTelegram) return html;
+    return html
+      .replace('<title>CoolRead</title>', '<title>CoolRead lite</title>')
+      .replace('<meta name="theme-color" content="#23211f" />', `<meta name="theme-color" content="#23211f" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />`);
+  },
+  closeBundle() {
+    if (!isTelegram) return;
+    fs.cpSync(path.resolve(__dirname, 'web-pwa/public/icons'), path.resolve(__dirname, 'dist-telegram/icons'), { recursive: true });
+  },
+});
+
 export default defineConfig({
   base: './',
-  plugins: [react(), woff2Only(), flavorHtml(), webPwa()],
+  plugins: [react(), woff2Only(), flavorHtml(), webPwa(), telegramLite()],
   resolve: {
     alias: {
       util: path.resolve(__dirname, './utils/util-polyfill.ts'),
@@ -78,7 +99,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: isWeb ? 'dist-web' : 'dist',
+    outDir: isWeb ? 'dist-web' : isTelegram ? 'dist-telegram' : 'dist',
     emptyOutDir: true,
     rollupOptions: {
       output: {

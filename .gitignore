@@ -9,3 +9,4 @@ android/capacitor-cordova-android-plugins/build
 android/keystore.properties
 android/*.jks
 dist-web
+dist-telegram

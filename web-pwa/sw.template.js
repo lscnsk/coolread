@@ -29,6 +29,8 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
   // Only the app's own files; books, catalogs and covers from other sites go straight to the network
   if (url.origin !== self.location.origin) return;
+  // The Telegram lite version lives in tg/ next to the site and is not cached here
+  if (url.pathname.startsWith(new URL('./tg/', self.registration.scope).pathname)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     if (req.mode === 'navigate') {

@@ -30,7 +30,8 @@ import { CatalogView } from './components/CatalogView';
 import { CatalogSidebar } from './components/CatalogSidebar';
 import { OpdsView } from './components/OpdsView';
 import { MangaDexView } from './components/MangaDexView';
-import { openSite } from './utils/webBrowser';
+import { openSite, barColors } from './utils/webBrowser';
+import { setTelegramBack, setTelegramColors } from './utils/telegram';
 import { OpdsSource, loadOpdsSources, saveOpdsSources } from './utils/opds';
 import { listenForIncomingFiles } from './utils/incoming';
 import { CatalogBook, CatalogSeries, CATALOG_SERIES, sortBooksChronologically } from './data/catalogData';
@@ -294,6 +295,12 @@ function App() {
         if (!isNative) window.removeEventListener('popstate', onPopState);
     };
   }, [isNative, handleHardwareBack]);
+
+  // Lite version in Telegram: its "Back" button closes what is open, like the phone's back button
+  const canGoBack = isSidebarOpen || isChapterListOpen || !!lightboxImage || !!currentBook || isAudioModalOpen
+    || navStack.length > 0 || isRsvpMode || isCatalogFilterOpen || isCatalogOpen;
+  useEffect(() => { setTelegramBack(canGoBack, () => { handleHardwareBack(); }); }, [canGoBack, handleHardwareBack]);
+  useEffect(() => { setTelegramColors(barColors(appStyle).background); }, [appStyle]);
 
   const toggleLibrary = () => {
     setIsSidebarOpen(prev => !prev);
