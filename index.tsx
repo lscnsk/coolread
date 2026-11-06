@@ -14,6 +14,7 @@ import '@fontsource/caveat/700.css';
 import '@fontsource/parisienne/400.css';
 import { Capacitor } from '@capacitor/core';
 import App from './App';
+import { initTelegram, isLite } from './utils/telegram';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
@@ -38,7 +39,9 @@ if ('serviceWorker' in navigator) {
   }
 }
 // Books live in the browser's storage: ask it not to clear them when space runs low (Safari does)
-if (isWebApp) navigator.storage?.persist?.().catch(() => {});
+if (isWebApp || isLite) navigator.storage?.persist?.().catch(() => {});
+
+initTelegram();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

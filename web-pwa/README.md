@@ -43,3 +43,27 @@ npm run build:web     # готовый сайт в dist-web/
 4. В репозитории GitHub: Settings → Secrets and variables → Actions → вкладка Variables →
    New variable: `CORS_PROXY` = `https://coolread-proxy.<ваше-имя>.workers.dev/?url=`
 5. Перезапустить публикацию: Actions → Deploy web version → Run workflow.
+
+## Lite-версия для Telegram (мини-приложение)
+
+Та же веб-версия, но без чтения вслух (даже системными голосами) и без встроенного браузера:
+сайты открываются в браузере Telegram. Кнопка «Назад» Telegram закрывает открытое (книгу,
+каталог, оглавление), шапка Telegram окрашивается в цвет стиля приложения, свайп вниз
+не закрывает приложение во время чтения.
+
+```
+npm run build:telegram   # готовый сайт в dist-telegram/
+```
+
+Публикация: тот же `deploy-web.yml` кладёт lite-версию в папку `tg/` сайта,
+то есть адрес будет `https://<имя>.github.io/coolread/tg/`.
+
+Подключение к боту:
+1. В Telegram открыть @BotFather → `/newbot`, придумать имя и адрес бота.
+2. `/newapp` → выбрать бота, указать название, описание, картинку 640×360,
+   адрес `https://<имя>.github.io/coolread/tg/` и короткое имя, например `read`.
+3. Готово: приложение открывается по ссылке `https://t.me/<бот>/read`.
+   Чтобы кнопка была прямо в чате с ботом: `/mybots` → бот → Bot Settings → Menu Button.
+
+Ссылка на конкретную книгу lscnsk: `https://t.me/<бот>/read?startapp=book_<id>`
+(как `#book=<id>` в веб-версии).
