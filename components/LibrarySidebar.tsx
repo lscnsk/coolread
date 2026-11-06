@@ -4,7 +4,8 @@ import { Book, PersistedState } from '../types';
 import { ChevronDown } from 'lucide-react';
 import { PRESET_FONTS, getFontFamilyCSS } from '../utils/fonts';
 import { SmartCoverImage } from './SmartCoverImage';
-import { addToHomeScreen, watchHomeScreen } from '../utils/telegram';
+import { addToHomeScreen, watchHomeScreen, offerFullVersion, RUSTORE_URL } from '../utils/telegram';
+import { openSite } from '../utils/webBrowser';
 
 interface LibrarySidebarProps {
   books: Book[];
@@ -859,6 +860,45 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                      <div className="flex flex-col min-w-0 flex-1 justify-center">
                         <span className="text-xs font-bold uppercase tracking-wider">Home screen</span>
                         <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">an icon that opens CoolRead lite</span>
+                     </div>
+                   </button>
+                 )}
+                 {/* 5. Lite version in Telegram: the full version for Android in RuStore */}
+                 {offerFullVersion() && (
+                   <button 
+                     onClick={() => openSite(RUSTORE_URL, appStyle)}
+                     className={`w-full h-[64px] shrink-0 px-2.5 py-1 border-2 border-dashed rounded transition-all flex items-center gap-3 group text-left ${
+                       isMarcel 
+                         ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]' 
+                         : isBimbo 
+                         ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]' 
+                         : isSurf 
+                         ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]' 
+                         : isDragon
+                         ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                         : isFF
+                         ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                         : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]'
+                     }`}
+                   >
+                     <div className={`w-10 h-14 shrink-0 rounded flex items-center justify-center ${
+                       isMarcel
+                         ? 'bg-[#C4B5E6]/40 text-[#544372]'
+                         : isBimbo
+                         ? 'bg-[#FBCFE8]/60 text-[#BE123C]'
+                         : isSurf
+                         ? 'bg-[#BAE6FD]/60 text-[#0284c7]'
+                         : isDragon
+                         ? 'bg-[#7f1d1d]/60 text-[#fcd34d]'
+                         : isFF
+                         ? 'bg-[#406da3]/60 text-[#dfc894]'
+                         : 'bg-[#45413e]/70 text-[#fffff0]'
+                     }`}>
+                       <span className="text-xl group-hover:scale-110 transition-transform emoji">🎧</span>
+                     </div>
+                     <div className="flex flex-col min-w-0 flex-1 justify-center">
+                        <span className="text-xs font-bold uppercase tracking-wider">Full version</span>
+                        <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">read aloud and more · Android, RuStore</span>
                      </div>
                    </button>
                  )}

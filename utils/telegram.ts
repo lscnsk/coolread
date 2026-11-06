@@ -14,6 +14,7 @@ interface TgBackButton {
 interface TgWebApp {
   initData: string;
   initDataUnsafe: { start_param?: string };
+  platform?: string;
   version: string;
   ready(): void;
   expand(): void;
@@ -96,3 +97,8 @@ export function addToHomeScreen(): void {
   const app = tg();
   if (app?.addToHomeScreen) safe(() => app.addToHomeScreen!());
 }
+
+// The full version (read aloud, az.lib.ru, built-in browser) is an Android app in RuStore
+export const RUSTORE_URL = 'https://www.rustore.ru/catalog/app/com.coolread.app';
+// Offered everywhere except iPhone, iPad and Mac, where it cannot be installed
+export const offerFullVersion = (): boolean => isLite && !['ios', 'macos'].includes(tg()?.platform || '');
