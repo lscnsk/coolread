@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { isLite } from './telegram';
 import { Preferences } from '@capacitor/preferences';
 
 // OPDS (Atom) catalogs such as Flibusta, Calibre or COPS.
@@ -74,6 +75,8 @@ const BOOK_SITES_KEY = 'cool_read_book_catalogs_added';
 const OLD_SITE_IDS = ['site_preset_azlib', 'site_preset_wikisource'];
 
 async function addBookSitesOnce(sources: OpdsSource[]): Promise<OpdsSource[]> {
+  // The lite version (Telegram) has no az.lib.ru: not added, and one saved earlier is hidden
+  if (isLite) return sources.filter(s => !BOOK_SITES.some(b => b.id === s.id || b.url === s.url));
   const get = async () => (isNative ? (await Preferences.get({ key: BOOK_SITES_KEY })).value : localStorage.getItem(BOOK_SITES_KEY));
   if (await get()) return sources;
   const kept = sources.filter(s => !OLD_SITE_IDS.includes(s.id));
