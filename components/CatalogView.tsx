@@ -93,7 +93,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
 
   // Early access: a book can have a short sampler to start with (sampler in catalog.json).
-  // Its card shows both covers: the main book large, the sampler small in the corner with a soft glow.
+  // Its card shows both covers: the main book large, the sampler small to its right, slightly over its edge, bottoms aligned, with a soft glow.
   // Tapping the small cover swaps them, and the card then tells about that book.
   const [swapped, setSwapped] = useState<Set<string>>(() => new Set());
   const findBook = (id?: string) => id ? (allBooks || books).find(b => b.id === id) || books.find(b => b.id === id) : undefined;
@@ -380,7 +380,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                 {/* COLUMN 1: COVER & DOWNLOAD/READ BUTTON */}
                 <div className="w-full flex flex-col items-center sm:items-start">
                   {/* Book Cover, and the paired book's small cover in its corner */}
-                  <div className={`relative w-40 sm:w-full max-w-[210px] ${miniBook ? 'mb-5' : ''}`}>
+                  <div className={`relative w-40 max-w-[210px] ${miniBook ? 'sm:w-[calc(100%-4rem)]' : 'sm:w-full'}`}>
                   <div key={book.id} className={miniBook ? 'sampler-swap-in' : undefined}>
                   {book.coverUrl ? (
                     <div
@@ -461,7 +461,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                       key={miniBook.id}
                       type="button"
                       onClick={() => toggleSwap(entry.id)}
-                      className={`sampler-swap-in absolute -right-7 sm:-right-4 -bottom-5 w-[42%] z-30 rounded-md block p-0 border-0 bg-transparent leading-[0] cursor-pointer active:scale-95 transition-transform`}
+                      className={`sampler-swap-in absolute left-full bottom-0 -ml-3 w-16 sm:w-[4.5rem] z-10 rounded-md block p-0 border-0 bg-transparent leading-[0] cursor-pointer active:scale-95 transition-transform`}
                       style={glowVars}
                       title={`Показать «${miniBook.title}»`}
                       aria-label={`Показать «${miniBook.title}»`}
