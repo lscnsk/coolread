@@ -28,11 +28,6 @@ interface LibrarySidebarProps {
   onDeleteCustomFont?: (name: string) => void;
   onOpenCatalog?: () => void;
   catalogNames?: string;
-  /** lscnsk books with a new edition in the catalog (library book id -> catalog book) */
-  newEditionBookIds?: Map<string, { id: string }>;
-  onUpdateBook?: (bookId: string) => void;
-  /** Catalog ids being downloaded right now */
-  updatingCatalogIds?: Set<string>;
 }
 
 const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ 
@@ -55,10 +50,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   onAddCustomFont,
   onDeleteCustomFont,
   onOpenCatalog,
-  catalogNames,
-  newEditionBookIds,
-  onUpdateBook,
-  updatingCatalogIds
+  catalogNames
 }) => {
   const [view, setView] = useState<'library' | 'settings'>('library');
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -324,26 +316,6 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
             </div>
 
             <div className="flex items-center gap-1 shrink-0 ml-auto z-20">
-              {newEditionBookIds?.has(book.id) && onUpdateBook && (() => {
-                const updating = updatingCatalogIds?.has(newEditionBookIds.get(book.id)!.id);
-                return (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); if (!updating) onUpdateBook(book.id); }}
-                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold whitespace-nowrap shrink-0 border transition-colors ${updating ? 'opacity-60 cursor-wait' : ''} ${
-                      isMarcel ? 'bg-[#544372] border-[#544372] text-white'
-                      : isBimbo ? 'bg-[#BE123C] border-[#BE123C] text-white'
-                      : isSurf ? 'bg-[#0284C7] border-[#0284C7] text-white'
-                      : isDragon ? 'bg-[#7f1d1d] border-[#b45309] text-[#fcd34d]'
-                      : isFF ? 'bg-[#17335e] border-[#dfc894]/70 text-[#dfc894]'
-                      : 'bg-[#e8c98a] border-[#e8c98a] text-[#1c1917]'
-                    }`}
-                    title="В каталоге новая редакция этой книги. Место чтения сохранится"
-                  >
-                    {updating ? '…' : '↻ обновить'}
-                  </button>
-                );
-              })()}
               <span className={`text-[10px] font-mono whitespace-nowrap select-none font-medium ${
                 isSelected 
                   ? (isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]/60' : isSurf ? 'text-[#0284c7]' : 'text-[#888]')
