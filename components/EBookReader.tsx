@@ -1396,6 +1396,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
     isChapterSwitchingRef.current = true;
     const isAlignEnd = initialProgressRatio >= 0.99;
     lastProgressRef.current = isAlignEnd ? 1 : 0;
+    // The place saved from scroll mode belongs to the old chapter: a new chapter starts at its beginning (or end)
+    lastScrollTopRef.current = 0;
 
     if (isAlignEnd) {
       setPageIndex(Math.max(0, totalPages - 1));
@@ -2523,6 +2525,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
   }, [readerFont, optimizeTypography]);
 
   const handlePageTurn = React.useCallback((direction: 'next' | 'prev') => {
+    // After a turn the reader is on a page of its own, not where scroll mode left off
+    lastScrollTopRef.current = 0;
     if (direction === 'next') {
       if (pageIndex < totalPages - 1) {
         const nextIdx = pageIndex + 1;
@@ -2662,6 +2666,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
           if (idx < 0 || idx === pageIndexRef.current || idx >= slices.length) return;
           lastTurn = Date.now();
           setPageIndex(idx);
+          lastScrollTopRef.current = 0;
           const ratio = slices.length > 1 ? idx / (slices.length - 1) : 0;
           lastProgressRef.current = ratio;
           readAloudRef.current.onProgressUpdate(ratio);
@@ -2920,6 +2925,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                           });
                           if (calculatedPage !== -1) {
                               setPageIndex(calculatedPage);
+                          lastScrollTopRef.current = 0;
                               const ratio = pageSlices.length > 1 ? calculatedPage / (pageSlices.length - 1) : 0;
                               lastProgressRef.current = ratio;
                               onProgressUpdate(ratio);
@@ -3190,6 +3196,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                       });
                       if (calculatedPage !== -1) {
                           setPageIndex(calculatedPage);
+                          lastScrollTopRef.current = 0;
                           const ratio = slices.length > 1 ? calculatedPage / (slices.length - 1) : 0;
                           lastProgressRef.current = ratio;
                           onProgressUpdate(ratio);
@@ -3350,6 +3357,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                           });
                           if (calculatedPage !== -1) {
                               setPageIndex(calculatedPage);
+                          lastScrollTopRef.current = 0;
                               const ratio = slices.length > 1 ? calculatedPage / (slices.length - 1) : 0;
                               lastProgressRef.current = ratio;
                               onProgressUpdate(ratio);
