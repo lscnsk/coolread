@@ -17,10 +17,6 @@ interface CatalogViewProps {
   onResetFilter: () => void;
   onDownloadBook: (book: CatalogBook) => Promise<void>;
   onReadBook: (book: CatalogBook) => void;
-  /** Replaces the reader's copy with the catalog's new edition */
-  onUpdateBook?: (book: CatalogBook) => void;
-  /** Catalog ids of books the reader has in an older edition */
-  newEditionIds?: Set<string>;
   downloadingIds: Set<string>;
   appStyle?: string;
   isLoading?: boolean;
@@ -71,8 +67,6 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   onResetFilter,
   onDownloadBook,
   onReadBook,
-  onUpdateBook,
-  newEditionIds,
   downloadingIds,
   appStyle = 'Cool',
   isLoading = false,
@@ -237,7 +231,7 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
   return (
     <div
       ref={catalogContainerRef}
-      className="flex-1 w-full h-full overflow-y-auto scrollbar-hide px-4 md:px-8 pt-24 pb-20 relative"
+      className="flex-1 w-full h-full overflow-y-auto scrollbar-hide px-4 md:px-8 pt-24 pb-20 relative isolate"
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
     >
       <div className="max-w-4xl mx-auto">
@@ -512,30 +506,6 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
                         <span>Read</span>
                       </button>
                     ) : null}
-                    {onShelf && newEditionIds?.has(book.id) && onUpdateBook && (
-                      <button
-                        onClick={() => onUpdateBook(book)}
-                        disabled={isDownloading}
-                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm ${
-                          isDownloading ? 'opacity-60 cursor-wait' : ''
-                        } ${
-                          isMarcel ? 'bg-[#544372] text-white'
-                          : isBimbo ? 'bg-[#BE123C] text-white'
-                          : isSurf ? 'bg-[#0284C7] text-white'
-                          : isDragon ? 'bg-[#7f1d1d] text-[#fcd34d] border border-[#991b1b]'
-                          : isFF ? 'bg-[#17335e] text-[#dfc894] border border-[#dfc894]/70'
-                          : 'bg-[#e8c98a] text-[#1c1917]'
-                        }`}
-                        title="Скачать новую редакцию книги, место чтения сохранится"
-                      >
-                        {isDownloading ? (
-                          <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <span>↻</span>
-                        )}
-                        <span>Новая редакция</span>
-                      </button>
-                    )}
                     {!onShelf && (
                       <button
                         onClick={() => onDownloadBook(book)}

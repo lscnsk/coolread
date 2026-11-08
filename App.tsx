@@ -965,9 +965,6 @@ function App() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         bookProgressMap={bookProgressMap}
-        newEditionBookIds={newEditions}
-        onUpdateBook={(libId) => { const cat = newEditions.get(libId); if (cat) handleUpdateCatalogBook(cat); }}
-        updatingCatalogIds={downloadingBookIds}
         appStyle={appStyle}
         onAppStyleChange={handleAppStyleChange}
         currentBookFormat={currentBook?.format || null}
@@ -1129,8 +1126,6 @@ function App() {
               onResetFilter={() => setCatalogFilter({ type: 'all' })}
               onDownloadBook={handleDownloadCatalogBook}
               onReadBook={handleReadCatalogBook}
-              onUpdateBook={handleUpdateCatalogBook}
-              newEditionIds={new Set(Array.from(newEditions.values()).map(b => b.id))}
               downloadingIds={downloadingBookIds}
               appStyle={appStyle}
               isLoading={isCatalogSyncing}
