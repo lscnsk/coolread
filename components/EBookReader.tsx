@@ -1703,8 +1703,40 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         ctx.font = `${st.fontStyle} ${st.fontWeight} ${fs}px ${st.fontFamily}`;
         spaceNat = ctx.measureText(' ').width + pLs;
       }
-      type Seg = { node: Text; s: number; e: number };
-      type Line = { top: number; segs: Seg[]; spaces: number[]; last: Seg | null; count: number };
+      // Places in the text are offsets into the paragraph's whole text (its text nodes in order).
+      // Trial changes split and merge text nodes, but never change the text, so the offsets of
+      // one measurement stay good after them.
+      type Seg = { s: number; e: number };
+      type Line = { top: number; g: number; segs: Seg[]; spaces: number[]; last: Seg | null; count: number };
+      type Entry = { node: Text; start: number };
+      let index: Entry[] | null = null;
+      let fullText = '';
+      const nodes = (): Entry[] => {
+        if (index) return index;
+        index = [];
+        let at = 0, text = '';
+        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null);
+        let tn: Text | null;
+        while ((tn = walker.nextNode() as Text | null)) {
+          index.push({ node: tn, start: at });
+          at += tn.length;
+          text += tn.nodeValue || '';
+        }
+        fullText = text;
+        return index;
+      };
+      // The text node that holds the characters from s to e
+      const locate = (s: number, e: number): Entry => {
+        const list = nodes();
+        let lo = 0, hi = list.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >> 1;
+          if (list[mid].start <= s) lo = mid; else hi = mid - 1;
+        }
+        const en = list[lo];
+        if (!en || s < en.start || e > en.start + en.node.length) throw new Error('text moved');
+        return en;
+      };
       const rectOf = (n: Text, i: number) => {
         range.setStart(n, i);
         range.setEnd(n, i + 1);
@@ -1721,33 +1753,34 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         }
         return v;
       };
-      const measure = (): Line[] => {
-        const lines: Line[] = [];
-        const lineAt = (top: number) => {
+      // Measures the lines from offset `from` (the start of a line) on; `before` are the lines
+      // above it, which a change further down cannot move.
+      const measure = (from = 0, before: Line[] = []): Line[] => {
+        const lines: Line[] = before.slice();
+        const lineAt = (top: number, g: number) => {
           let L = lines[lines.length - 1];
           if (!L || top > L.top + lineH * 0.5) {
-            L = { top, segs: [], spaces: [], last: null, count: 0 };
+            L = { top, g, segs: [], spaces: [], last: null, count: 0 };
             lines.push(L);
           }
           return L;
         };
-        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null);
-        let tn: Text | null;
-        while ((tn = walker.nextNode() as Text | null)) {
+        for (const { node: tn, start } of nodes()) {
           const text = tn.nodeValue || '';
-          if (!text) continue;
+          if (!text || start + text.length <= from) continue;
           // Specially spaced text (dots, dashes) keeps its own spacing
           const parent = tn.parentElement || p;
           const parentLs = lsOf(parent.classList.contains('mt-ls') ? parent.parentElement || p : parent);
           const own = Math.abs(parentLs - pLs) < 0.01;
           const re = / +|[^ ]+/g;
+          re.lastIndex = Math.max(0, from - start);
           let m: RegExpExecArray | null;
           while ((m = re.exec(text))) {
             const a = m.index, b = a + m[0].length;
             if (m[0][0] === ' ') {
               const r = rectOf(tn, a);
               if (r && r.width > 0) {
-                const L = lineAt(r.top);
+                const L = lineAt(r.top, start + a);
                 L.spaces.push(r.width);
                 L.count += b - a;
               }
@@ -1776,8 +1809,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 }
                 j = lo;
               }
-              const L = lineAt(r0.top);
-              const seg = { node: tn, s: i, e: j };
+              const L = lineAt(r0.top, start + i);
+              const seg = { s: start + i, e: start + j };
               if (own) L.segs.push(seg);
               L.last = seg;
               L.count += j - i;
@@ -1792,18 +1825,19 @@ const EBookReader: React.FC<EBookReaderProps> = ({
       const wrapLine = (L: Line, extraPx: number): HTMLElement[] => {
         const segs = L.segs.filter(sg => sg.e > sg.s);
         const made: HTMLElement[] = [];
-        // From the end backwards, so earlier offsets in the same text node stay valid
         for (let k = segs.length - 1; k >= 0; k--) {
           const sg = segs[k];
-          const node = sg.node;
-          if (sg.e < node.length) node.splitText(sg.e);
-          const target = sg.s > 0 ? node.splitText(sg.s) : node;
+          const en = locate(sg.s, sg.e);
+          const node = en.node, s0 = sg.s - en.start, e0 = sg.e - en.start;
+          if (e0 < node.length) node.splitText(e0);
+          const target = s0 > 0 ? node.splitText(s0) : node;
           const span = document.createElement('span');
           span.className = 'mt-ls';
           span.style.setProperty('letter-spacing', `${(pLs + extraPx).toFixed(2)}px`, 'important');
           target.parentNode!.insertBefore(span, target);
           span.appendChild(target);
           made.push(span);
+          index = null;
         }
         return made;
       };
@@ -1817,11 +1851,14 @@ const EBookReader: React.FC<EBookReaderProps> = ({
           parents.add(parent);
         }
         parents.forEach(n => (n as Element).normalize?.());
+        index = null;
       };
       const gapOf = (L: Line) => (L.spaces.length ? L.spaces.reduce((x, y) => x + y, 0) / L.spaces.length : 0);
       const loose = fs * 0.42;
       const target = Math.max(spaceNat * 1.1, fs * 0.3);
 
+      // A trial that is taken back leaves the paragraph exactly as it was measured, so the
+      // measurement is kept; one that stays is measured again from its own line down only.
       let lines = measure();
       for (let i = 0; i < lines.length - 1 && i < 200; i++) {
         const L = lines[i];
@@ -1833,7 +1870,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
         let done = false;
         for (const t of allowTighten ? [0.015, 0.03] : []) {
           const spans = wrapLine(L, -t * fs);
-          const after = measure();
+          const after = measure(L.g, lines.slice(0, i));
           const A = after[i];
           if (A && A.count > L.count && A.spaces.length && gapOf(A) <= Math.max(gap, loose) && gapOf(A) >= spaceNat * 0.9) {
             lines = after;
@@ -1841,30 +1878,28 @@ const EBookReader: React.FC<EBookReaderProps> = ({
             break;
           }
           unwrap(spans);
-          lines = measure();
-          if (lines[i]?.count !== L.count) { done = true; break; } // layout moved under us; leave it
         }
         if (done) continue;
 
         // 2. Otherwise spread part of the slack between the letters (the last letter takes none,
         //    so the right edge stays flush)
-        const own = lines[i].segs.map(sg => ({ ...sg }));
-        if (lines[i].last && own.length && own[own.length - 1].node === lines[i].last!.node && own[own.length - 1].e === lines[i].last!.e) {
+        const own = L.segs.map(sg => ({ ...sg }));
+        if (L.last && own.length && own[own.length - 1].e === L.last.e) {
           own[own.length - 1].e -= 1;
         }
+        nodes();
         let chars = 0;
-        for (const sg of own) for (let c = sg.s; c < sg.e; c++) if (sg.node.nodeValue![c] !== '­') chars++;
-        const extra = (gap - target) * lines[i].spaces.length - 1;
+        for (const sg of own) for (let c = sg.s; c < sg.e; c++) if (fullText[c] !== '­') chars++;
+        const extra = (gap - target) * L.spaces.length - 1;
         if (!chars || extra <= 0) continue;
         const ls = Math.min(extra / chars, fs * 0.04);
         if (ls < 0.3) continue;
-        const countBefore = lines[i].count, total = lines.length;
-        const spans = wrapLine({ ...lines[i], segs: own }, ls);
-        const after = measure();
+        const countBefore = L.count, total = lines.length;
+        const spans = wrapLine({ ...L, segs: own }, ls);
+        const after = measure(L.g, lines.slice(0, i));
         // Safety: nothing may move to another line
         if (after.length !== total || after[i]?.count !== countBefore) {
           unwrap(spans);
-          lines = measure();
         } else {
           lines = after;
         }
