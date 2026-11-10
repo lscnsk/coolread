@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
 import fixture from './fixtures-catalog.json';
-import { syncCatalogFromGitHub, lastCatalogSyncTime } from '../utils/catalogSync';
+import { syncCatalogFromGitHub, lastCatalogSyncTime, buildCatalogSeriesFromBooks } from '../utils/catalogSync';
 
 const catalog = JSON.stringify(fixture);
 
@@ -21,6 +21,17 @@ describe('lscnsk catalog', () => {
     expect(series.map(s => s.name)).toContain('Далекая Республика');
     expect(Date.now() - lastCatalogSyncTime()).toBeLessThan(5000);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('catalog series', () => {
+  it('lists only the series the books name', () => {
+    expect(buildCatalogSeriesFromBooks([])).toEqual([]);
+    const series = buildCatalogSeriesFromBooks([
+      { id: 'a', filename: 'a.fb2', title: 'A', author: 'X', series: 'Greater Britain' } as any,
+      { id: 'b', filename: 'b.fb2', title: 'B', author: 'Y', series: 'Troisième République' } as any,
+    ]);
+    expect(series.map(s => s.name)).toEqual(['Greater Britain', 'Troisième République']);
   });
 });
 
