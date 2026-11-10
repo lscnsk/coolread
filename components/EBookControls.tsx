@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Type, Sun, Moon, Pilcrow, Zap, BookOpen, Scroll, Headphones } from 'lucide-react';
 import { ReadAloudSpeed, ReadAloudTransport } from './ReadAloudPanel';
 import { setOpen as setReadAloudOpen, useReadAloud } from '../utils/readAloud';
-import { isLite } from '../utils/telegram';
 import { Chapter } from '../types';
 
 interface EBookControlsProps {
@@ -61,8 +60,7 @@ const EBookControls: React.FC<EBookControlsProps> = ({
   const isDragon = appStyle === 'Dragon';
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
   const readAloud = useReadAloud();
-  // The lite version (Telegram) has no read aloud at all
-  const canReadAloud = !isLite && currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && !isRsvpMode;
+  const canReadAloud = currentBookFormat !== 'pdf' && currentBookFormat !== 'comic' && !isRsvpMode;
   // While reading aloud, its controls take the place of the buttons left of the headphones
   const voiceMode = canReadAloud && readAloud.open;
   const accentColor = isMarcel ? '#544372' : isBimbo ? '#BE123C' : isSurf ? '#0ea5e9' : isDragon ? '#ea580c' : isFF ? '#cca972' : '#fffff0';

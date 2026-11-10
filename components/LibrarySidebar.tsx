@@ -343,7 +343,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
 
   return (
     <div 
-      className={`fixed inset-y-0 left-0 z-40 w-80 bg-[#2c2a28] border-r border-[#45413e] transform transition-transform duration-300 ease-in-out ${
+      className={`fixed inset-y-0 left-0 z-40 w-80 bg-[#2c2a28] border-r border-[#45413e] transform transition-transform duration-300 ease-panel ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } flex flex-col h-full shadow-2xl bimbo-sidebar`}
     >

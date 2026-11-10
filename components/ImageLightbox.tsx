@@ -22,7 +22,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[65] bg-black/95 flex flex-col items-center justify-center select-none animate-in fade-in duration-300"
+      className="fixed inset-0 z-[65] bg-black/95 flex flex-col items-center justify-center select-none fade-in"
       onClick={onClose}
     >
       <div className="relative max-w-full max-h-full flex items-center justify-center p-4">

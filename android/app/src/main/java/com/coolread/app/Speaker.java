@@ -6,7 +6,6 @@ import android.media.AudioFocusRequest;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
-import android.media.PlaybackParams;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -70,7 +69,7 @@ final class Speaker implements PlaybackService.Controller {
     private boolean asked; // onNeed sent for the current end of the queue; guarded by lock
 
     private Session session;
-    private float speed = 1f;
+    private volatile float speed = 1f;
     private boolean paused, resumeOnFocus;
     private PlaybackService.NowPlaying info = new PlaybackService.NowPlaying();
     private final ArrayList<String> chapterTitles = new ArrayList<>();
@@ -93,6 +92,24 @@ final class Speaker implements PlaybackService.Controller {
         final short[] pcm;
         final double[] marks;
         long start; // frame where it starts in the track
+        volatile long end = -1; // frame where it ends in the track, once all of it is written
+        // Which frame of the track is which sample of pcm: pairs {track frame, sample}, in order.
+        // The speed is made here, not by the phone, so the two differ. Guarded by Session.chunks.
+        final ArrayList<long[]> map = new ArrayList<>();
+
+        /** Seconds into the sentence that are heard when the track is at this frame. */
+        double timeAt(long head, float speed) {
+            long[] a = null, b = null;
+            for (long[] m : map) {
+                if (m[0] <= head) a = m;
+                else { b = m; break; }
+            }
+            if (a == null) return 0;
+            double sample = b != null && b[0] > a[0]
+                ? a[1] + (head - a[0]) * (double) (b[1] - a[1]) / (b[0] - a[0])
+                : a[1] + (head - a[0]) * (double) speed;
+            return Math.min(sample, pcm.length) / RATE;
+        }
 
         Chunk(int pos, Item item, short[] pcm, double[] marks) {
             this.pos = pos;
@@ -116,32 +133,23 @@ final class Speaker implements PlaybackService.Controller {
 
         Session() {
             track = obtainTrack();
-            applySpeed(track);
         }
 
         void start(int from) {
             engine.submit(() -> produce(from));
             writer = new Thread(this::write, "speech-writer");
             writer.start();
-            // The track starts with the first sound written (see write): some phones start
-            // an empty track at normal speed whatever was set before
         }
 
         private volatile boolean started;
 
-        /** First sound is in the track: play it, at the set speed. */
+        /** First sound is in the track: play it. */
         private void begin() {
             if (started) return;
             started = true;
             main.post(() -> {
                 if (cancelled || session != this) return;
-                applySpeed(track);
-                if (!paused) {
-                    track.play();
-                    forceSpeed(track);
-                    // and once more when it is really playing
-                    main.postDelayed(() -> { if (!cancelled && session == this) forceSpeed(track); }, 300);
-                }
+                if (!paused) track.play();
             });
         }
 
@@ -186,25 +194,57 @@ final class Speaker implements PlaybackService.Controller {
             return false;
         }
 
+        // The speed is made here (see Tempo), and the track always plays at normal speed
+        private final Tempo tempo = new Tempo(RATE);
+        private final short[] block = new short[RATE / 10], out = new short[RATE / 5];
+
+        /** Writes what the speed changer has ready; false if the track is gone. */
+        private boolean drain() throws InterruptedException {
+            int got;
+            while (!cancelled && (got = tempo.read(out, out.length)) > 0) {
+                int off = 0;
+                while (!cancelled && off < got) {
+                    int n = track.write(out, off, got - off, AudioTrack.WRITE_NON_BLOCKING);
+                    if (n < 0) return false;
+                    if (n > 0) begin();
+                    if (n == 0) Thread.sleep(20);
+                    off += n;
+                }
+                written += got;
+            }
+            return true;
+        }
+
         private void write() {
             try {
+                Chunk prev = null;
                 while (!cancelled) {
                     Chunk c = ready.poll(100, TimeUnit.MILLISECONDS);
                     if (c == null) continue;
                     if (c == END) break;
+                    if (prev != null) prev.end = written;
+                    prev = c;
                     c.start = written;
-                    synchronized (chunks) { chunks.add(c); }
+                    synchronized (chunks) {
+                        c.map.add(new long[] {written, 0});
+                        chunks.add(c);
+                    }
                     int off = 0;
                     while (!cancelled && off < c.pcm.length) {
-                        int n = track.write(c.pcm, off, c.pcm.length - off, AudioTrack.WRITE_NON_BLOCKING);
-                        if (n < 0) return;
-                        if (n > 0) begin();
-                        if (n == 0) Thread.sleep(20);
+                        // A tenth of a second at a time, so a change of speed is heard at once
+                        int n = Math.min(block.length, c.pcm.length - off);
+                        System.arraycopy(c.pcm, off, block, 0, n);
+                        tempo.setSpeed(speed);
+                        tempo.write(block, n);
                         off += n;
+                        if (!drain()) return;
+                        synchronized (chunks) { c.map.add(new long[] {written, off}); }
                     }
-                    written += c.pcm.length;
                 }
                 if (!cancelled) {
+                    tempo.flush();
+                    if (!drain()) return;
+                    if (prev != null) prev.end = written;
                     // Pad a little so the last words are not cut off when the track stops
                     short[] pad = new short[RATE / 5];
                     int off = 0;
@@ -252,12 +292,12 @@ final class Speaker implements PlaybackService.Controller {
             Chunk found = null;
             synchronized (chunks) {
                 for (Chunk c : chunks) {
-                    if (c.start <= head && head < c.start + c.pcm.length) found = c;
+                    if (c.start <= head && (c.end < 0 ? !fed : head < c.end)) found = c;
                 }
                 // Forget what has been played
-                while (chunks.size() > 2 && chunks.get(1).start + chunks.get(1).pcm.length <= head) chunks.remove(0);
+                while (chunks.size() > 2 && chunks.get(1).end >= 0 && chunks.get(1).end <= head) chunks.remove(0);
+                if (found != null) time[0] = found.timeAt(head, speed);
             }
-            if (found != null) time[0] = (head - found.start) / (double) RATE;
             return found;
         }
 
@@ -276,7 +316,7 @@ final class Speaker implements PlaybackService.Controller {
         main.post(() -> listener.onNeed(chapter));
     }
 
-    // One track for all runs: a new track for every skip lost the speed for a moment on some phones
+    // One track for all runs
     private AudioTrack shared;
 
     private AudioTrack obtainTrack() {
@@ -289,61 +329,7 @@ final class Speaker implements PlaybackService.Controller {
         return shared;
     }
 
-    /**
-     * Sets the speed so that the phone really takes it: some phones keep a track that starts
-     * playing at normal speed while still reporting the set one, and ignore the same value set again.
-     * A different value first, then the right one, makes them apply it.
-     */
-    private void forceSpeed(AudioTrack t) {
-        try {
-            t.setPlaybackParams(new PlaybackParams().setSpeed(speed == 1f ? 1.05f : 1f).setPitch(1f));
-        } catch (Exception e) {
-            Log.w(TAG, "speed", e);
-        }
-        applySpeed(t);
-    }
-
     private static final String TAG = "Speaker";
-
-    // The speed actually heard, measured from how fast the track plays its frames
-    private Session measured;
-    private long measureAt, measureHead;
-    private int fixes;
-
-    /** Called while playing: if the track plays at normal speed though another is set, sets it again. */
-    private void checkSpeed(Session s) {
-        long now = android.os.SystemClock.elapsedRealtime();
-        long head;
-        try {
-            head = s.track.getPlaybackHeadPosition() & 0xffffffffL;
-        } catch (Exception e) {
-            return;
-        }
-        if (measured != s || head < measureHead) {
-            measured = s;
-            measureAt = now;
-            measureHead = head;
-            fixes = 0;
-            return;
-        }
-        long dt = now - measureAt;
-        if (dt < 900) return;
-        double rate = (head - measureHead) / (RATE * dt / 1000.0);
-        measureAt = now;
-        measureHead = head;
-        // Waiting for the voice gives a lower rate; exactly normal speed is the phone ignoring the setting
-        if (Math.abs(speed - 1f) >= 0.2f && Math.abs(rate - 1.0) < 0.07 && fixes < 5) {
-            fixes++;
-            Log.w(TAG, "plays at normal speed, setting " + speed + " again");
-            forceSpeed(s.track);
-        }
-    }
-
-    private void applySpeed(AudioTrack t) {
-        try {
-            t.setPlaybackParams(new PlaybackParams().setSpeed(speed).setPitch(1f));
-        } catch (Exception ignored) {}
-    }
 
     // ---- Called by the plugin ----
 
@@ -395,9 +381,6 @@ final class Speaker implements PlaybackService.Controller {
         paused = false;
         requestFocus();
         session.track.play();
-        forceSpeed(session.track); // some phones drop the speed after a pause
-        Session s = session;
-        main.postDelayed(() -> { if (session == s && !paused) forceSpeed(s.track); }, 300);
         state("playing");
     }
 
@@ -413,7 +396,6 @@ final class Speaker implements PlaybackService.Controller {
 
     void setSpeed(float s) {
         speed = s;
-        if (session != null) applySpeed(session.track);
         info.speed = s;
         if (session != null) PlaybackService.update(ctx, info, this);
     }
@@ -515,8 +497,6 @@ final class Speaker implements PlaybackService.Controller {
                 // Waiting for the voice (or for the next chapter)
                 state("loading");
             }
-            if (!paused && "playing".equals(lastState)) checkSpeed(s);
-            else measured = null;
             if (s.finished()) {
                 endSession();
                 abandonFocus();

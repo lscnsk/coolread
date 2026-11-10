@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Minus } from 'lucide-react';
 import { CatalogSeries, CatalogBook } from '../data/catalogData';
-import { OpdsSource, normalizeOpdsUrl, MANGADEX_SOURCE } from '../utils/opds';
+import { OpdsSource, normalizeOpdsUrl, MANGADEX_SOURCE, canReadOtherSites } from '../utils/opds';
 import { openSite } from '../utils/webBrowser';
-import { Capacitor } from '@capacitor/core';
 
-// The web version keeps only the built-in catalogs: adding one needs the app
-const canAddCatalogs = Capacitor.isNativePlatform();
+// The web and Telegram versions can add catalogs only when the site has its proxy set up
+// (web-pwa/README.md): a browser does not let a page read other sites by itself
+const canAddCatalogs = canReadOtherSites;
 
 interface CatalogSidebarProps {
   isOpen: boolean;
@@ -174,7 +174,7 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = React.memo(({
 
   return (
     <div
-      className={`fixed inset-y-0 right-0 z-40 w-80 max-w-full bg-[#2c2a28] border-l border-[#45413e] transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col ${
+      className={`fixed inset-y-0 right-0 z-40 w-80 max-w-full bg-[#2c2a28] border-l border-[#45413e] transform transition-transform duration-300 ease-panel shadow-2xl flex flex-col ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       } bimbo-sidebar`}
     >

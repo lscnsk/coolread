@@ -959,9 +959,13 @@ function App() {
         <span className="font-literata">.</span>
       </div>
       
-      {(isSidebarOpen || isChapterListOpen || isCatalogFilterOpen) && (
-        <div className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm" onClick={closeAllSidebars} />
-      )}
+      {/* The shade behind an open side panel fades with it */}
+      <div
+        className={`fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+          isSidebarOpen || isChapterListOpen || isCatalogFilterOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={closeAllSidebars}
+      />
 
       {/* --- Lightbox Modal (Zoom, Drag & Side Navigation) --- */}
       {lightboxImage && (
@@ -1541,7 +1545,7 @@ function App() {
         
         {/* Global Loading Overlay */}
         {isLoading && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-300">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center text-center p-6 fade-in">
                 <div className={`w-16 h-16 border-4 rounded-full animate-spin ${
                     isBimbo ? 'border-pink-200 border-t-pink-600' : 
                     isSurf ? 'border-sky-200 border-t-sky-600' : 

@@ -1,5 +1,5 @@
 // CoolRead lite: the web version opened as a Telegram Mini App (npm run build:telegram).
-// No read aloud and no built-in browser. Telegram's own script (telegram-web-app.js,
+// No built-in browser and fewer book sites. Telegram's own script (telegram-web-app.js,
 // added to index.html by the build) gives the back button, colours and links.
 
 export const isLite = import.meta.env.VITE_TARGET === 'telegram';
@@ -98,7 +98,7 @@ export function addToHomeScreen(): void {
   if (app?.addToHomeScreen) safe(() => app.addToHomeScreen!());
 }
 
-// The full version (read aloud, az.lib.ru, built-in browser) is an Android app in RuStore
+// The full version (az.lib.ru, built-in browser, reading with the screen off) is an Android app in RuStore
 export const RUSTORE_URL = 'https://www.rustore.ru/catalog/app/com.coolread.app';
 // The APK attached as CoolRead.apk to the latest GitHub release of this repository
 export const APK_URL = 'https://github.com/lscnsk/coolread/releases/latest/download/CoolRead.apk';

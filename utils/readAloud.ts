@@ -8,14 +8,16 @@ import type { NowPlayingInfo } from './nowPlaying';
 // The text is split into sentences and handed to the native side, which reads them by
 // itself, so it goes on with the screen off, and asks for the next chapter when it gets
 // there. It reports the word being said, which is highlighted when the reader is on screen.
-// In the web preview a silent <audio> element stands in for the voice.
+// The web and Telegram versions have the same voice, run in the browser itself (utils/silero):
+// it is downloaded the same way, and the sentences are made one by one and played by an
+// <audio> element. Where the browser cannot run it, the system's voices are used.
 
 export interface Voice {
   id: string;
   name: string;
   lang: string;
   builtIn: boolean;
-  /** Android: false until the voice has been downloaded; size is the download in bytes. */
+  /** False until the voice has been downloaded; size is the download in bytes. */
   installed?: boolean;
   size?: number;
 }
@@ -113,18 +115,38 @@ function savePrefs() {
 
 let prefsLoaded: Promise<void> | null = null;
 
+// Web and Telegram versions: the Silero voice in the browser. Left out of the Android build,
+// which has its own.
+const WEB_VOICE = import.meta.env.DEV || import.meta.env.VITE_TARGET === 'web' || import.meta.env.VITE_TARGET === 'telegram';
+type SileroWeb = typeof import('./silero/web');
+let web: SileroWeb | null = null;
+let webLoading: Promise<SileroWeb | null> | null = null;
+function loadWebVoice(): Promise<SileroWeb | null> {
+  if (isNative) return Promise.resolve(null);
+  if (!webLoading) {
+    webLoading = (WEB_VOICE ? import('./silero/web') : Promise.resolve(null))
+      .then(m => (web = m && m.supported ? m : null))
+      .catch(() => null);
+  }
+  return webLoading;
+}
+const isWebVoice = () => !!web && state.voice === web.VOICE_ID;
+
 // Web version: the voices of the computer or phone (Web Speech API). Russian ones first.
 const speech: SpeechSynthesis | null = !isNative && typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
 const SYS = 'sys:';
 const isSystemVoice = () => !!speech && (state.voice || '').startsWith(SYS);
 
-function webVoices(): Voice[] {
+async function webVoices(): Promise<Voice[]> {
+  const own: Voice[] = [];
+  const w = await loadWebVoice();
+  if (w) own.push({ id: w.VOICE_ID, name: w.VOICE_NAME, lang: 'ru', builtIn: true, installed: await w.installed(), size: w.VOICE_SIZE });
   const list = speech?.getVoices() || [];
-  if (!list.length) return [{ id: 'web', name: 'silent (no voices in this browser)', lang: '', builtIn: true }];
+  if (!list.length) return own.length ? own : [{ id: 'web', name: 'silent (no voices in this browser)', lang: '', builtIn: true }];
   const ru = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().startsWith('ru');
-  return [...list]
+  return [...own, ...[...list]
     .sort((a, b) => Number(ru(b)) - Number(ru(a)) || Number(b.localService) - Number(a.localService) || a.name.localeCompare(b.name))
-    .map(v => ({ id: SYS + v.voiceURI, name: v.name, lang: v.lang, builtIn: ru(v) }));
+    .map(v => ({ id: SYS + v.voiceURI, name: v.name, lang: v.lang, builtIn: ru(v) }))];
 }
 // Browsers load their voice list a moment after the page
 speech?.addEventListener?.('voiceschanged', () => { refreshVoices().catch(() => {}); });
@@ -134,16 +156,18 @@ export async function refreshVoices(): Promise<Voice[]> {
   await prefsLoaded;
   let voices: Voice[] = [];
   try {
-    voices = isNative ? (await Native.listVoices()).voices : webVoices();
+    voices = isNative ? (await Native.listVoices()).voices : await webVoices();
   } catch {}
-  const voice = voices.some(v => v.id === state.voice) ? state.voice : (voices.find(v => v.builtIn) || voices[0])?.id || null;
+  // There is no list to choose from: the app's own voice is used wherever it can run
+  const voice = web && voices.some(v => v.id === web!.VOICE_ID) ? web.VOICE_ID
+    : voices.some(v => v.id === state.voice) ? state.voice : (voices.find(v => v.builtIn) || voices[0])?.id || null;
   set({ voices, voice });
   return voices;
 }
 
-/** The chosen voice when it still has to be downloaded (Android), otherwise null. */
+/** The chosen voice when it still has to be downloaded, otherwise null. */
 export const missingVoice = (st: State): Voice | null =>
-  (isNative && st.voices.find(v => v.id === st.voice && v.installed === false)) || null;
+  st.voices.find(v => v.id === st.voice && v.installed === false) || null;
 
 let downloadListener = false;
 
@@ -151,7 +175,8 @@ let downloadListener = false;
 export async function downloadVoice() {
   const v = missingVoice(state);
   if (!v || state.download !== null) return;
-  if (!downloadListener) {
+  unlock();
+  if (isNative && !downloadListener) {
     downloadListener = true;
     Native.addListener('download', e => {
       if (state.download !== null && e.total > 0) set({ download: Math.min(1, e.received / e.total) });
@@ -159,7 +184,8 @@ export async function downloadVoice() {
   }
   set({ download: 0, error: null });
   try {
-    await Native.downloadVoice({ voice: v.id });
+    if (isNative) await Native.downloadVoice({ voice: v.id });
+    else await web!.download(part => { if (state.download !== null) set({ download: part }); });
   } catch (e: any) {
     const cancelled = String(e?.message || e).includes('cancelled');
     set({ download: null, error: cancelled ? null : 'Download failed' });
@@ -171,7 +197,9 @@ export async function downloadVoice() {
 }
 
 export function cancelDownload() {
-  if (state.download !== null) Native.cancelDownload().catch(() => {});
+  if (state.download === null) return;
+  if (isNative) Native.cancelDownload().catch(() => {});
+  else web?.cancelDownload();
 }
 
 export function setVoice(id: string) {
@@ -429,6 +457,26 @@ let marks: number[] | undefined;
 let lastWord = -1;
 let raf = 0;
 const AHEAD = 4;
+// The <audio> element holds a sentence (not nothing, and not the silence of unlock)
+let loaded = false;
+
+/** Forgets the sentences made ahead. */
+function dropCache() {
+  for (const p of cache.values()) p.then(r => URL.revokeObjectURL(r.url)).catch(() => {});
+  cache.clear();
+  web?.cancel();
+}
+
+// Browsers let a page make sound only in answer to a tap, and the first sentence is ready
+// a moment later: a blink of silence played right at the tap keeps the permission.
+let unlocked = false;
+function unlock() {
+  if (isNative || unlocked || !audio.play) return;
+  unlocked = true;
+  loaded = false;
+  audio.src = silentWav(0.05);
+  audio.play().catch(() => {});
+}
 
 function silentWav(seconds: number): string {
   // Web preview only: a silent file as long as the sentence would take to say
@@ -447,8 +495,8 @@ function synth(i: number) {
   let p = cache.get(i);
   if (!p) {
     const s = sentences[i];
-    p = new Promise(res => {
-      // Web preview: silence, with evenly spaced word times
+    p = isWebVoice() ? web!.speak(s.text).then(r => ({ ...r, path: '' })) : new Promise(res => {
+      // No voice at all: silence, with evenly spaced word times
       const d = s.text.length * 0.06, n = s.text.split(' ').length;
       setTimeout(() => res({ url: silentWav(d), path: '', duration: d, marks: s.text.split(' ').map((_, j) => (j * d) / n) }), 150);
     });
@@ -552,6 +600,13 @@ async function playSentence(i: number) {
   const myEpoch = epoch;
   current = i;
   lastWord = -1;
+  // Sentences already said are not kept
+  for (const [k, p] of cache) {
+    if (k < i - 1) {
+      cache.delete(k);
+      p.then(r => URL.revokeObjectURL(r.url)).catch(() => {});
+    }
+  }
   prefetch(i);
   set({ loading: true });
   let item;
@@ -559,12 +614,14 @@ async function playSentence(i: number) {
     item = await synth(i);
   } catch (e: any) {
     if (myEpoch !== epoch) return;
+    console.error('read aloud:', e);
     set({ playing: false, loading: false, error: 'Voice error' });
     return;
   }
   if (myEpoch !== epoch) return;
   set({ loading: false });
   marks = item.marks;
+  loaded = true;
   audio.src = item.url;
   audio.playbackRate = state.speed;
   (audio as any).preservesPitch = true;
@@ -593,7 +650,7 @@ function sentenceEnded() {
   // End of the chapter: open the next one and carry on from its start
   highlight(null);
   const myEpoch = ++epoch;
-  cache.clear();
+  dropCache();
   if (!nav?.nextChapter()) {
     stop();
     return;
@@ -616,7 +673,7 @@ function sentenceEnded() {
   };
   setTimeout(wait, 200 + PAUSE_CHAPTER / state.speed);
 }
-audio.onended = () => sentenceEnded();
+audio.onended = () => { if (loaded) sentenceEnded(); };
 
 // ---- Native reading ----
 
@@ -784,14 +841,22 @@ export async function play() {
     speakSentence(current);
     return;
   }
-  if (sameText && current >= 0 && audio.src && audio.paused && isOnScreen(current)) {
-    audio.playbackRate = state.speed;
-    audio.play().catch(() => set({ playing: false }));
-    if (!raf) raf = requestAnimationFrame(tick);
+  if (sameText && current >= 0 && isOnScreen(current)) {
+    if (loaded && audio.paused && !audio.ended) {
+      audio.playbackRate = state.speed;
+      audio.play().catch(() => set({ playing: false }));
+      if (!raf) raf = requestAnimationFrame(tick);
+    } else {
+      // Paused before the sentence began, or moved with the skip buttons
+      unlock();
+      epoch++;
+      playSentence(current);
+    }
     return;
   }
+  unlock();
   epoch++;
-  cache.clear();
+  dropCache();
   if (!sameText) collect(root);
   if (!sentences.length) {
     set({ playing: false });
@@ -821,19 +886,21 @@ export function skip(delta: number) {
     current = next;
     highlight(rangeOf(sentences[next].words[0].start, sentences[next].words[0].end));
     audio.removeAttribute?.('src');
+    loaded = false;
     return;
   }
   epoch++;
-  cache.clear();
+  dropCache();
   hush();
   playSentence(next);
 }
 
 function stopAudio() {
   epoch++;
-  cache.clear();
+  dropCache();
   hush();
   audio.removeAttribute?.('src');
+  loaded = false;
   current = -1;
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
@@ -853,10 +920,15 @@ export function stop() {
 }
 
 export function setOpen(open: boolean) {
-  if (!open) stop();
-  else {
+  if (!open) {
+    stop();
+    web?.rest();
+  } else {
     refreshVoices().then(() => {
-      if (isNative && state.voice && !missingVoice(state)) Native.prepare({ voice: state.voice }).catch(() => {});
+      if (!state.voice || missingVoice(state)) return;
+      // Loads the voice while the reader finds the play button
+      if (isNative) Native.prepare({ voice: state.voice }).catch(() => {});
+      else if (isWebVoice()) web!.warm();
     });
   }
   set({ open, error: null });

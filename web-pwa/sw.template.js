@@ -31,6 +31,8 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
   // The Telegram lite version lives in tg/ next to the site and is not cached here
   if (url.pathname.startsWith(new URL('./tg/', self.registration.scope).pathname)) return;
+  // The runtime of the read-aloud voice is big and is kept with the voice (utils/silero/store.ts)
+  if (url.pathname.startsWith(new URL('./ort/', self.registration.scope).pathname) && url.pathname.endsWith('.wasm')) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     if (req.mode === 'navigate') {

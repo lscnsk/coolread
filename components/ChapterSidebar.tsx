@@ -639,7 +639,7 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
 
   return (
     <div 
-      className={`fixed inset-y-0 right-0 z-40 w-80 max-w-full bg-[#2c2a28] border-l border-[#45413e] transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col ${
+      className={`fixed inset-y-0 right-0 z-40 w-80 max-w-full bg-[#2c2a28] border-l border-[#45413e] transform transition-transform duration-300 ease-panel shadow-2xl flex flex-col ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       } bimbo-sidebar`}
     >
