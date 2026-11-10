@@ -13,12 +13,14 @@ export const ReadAloudSpeed: React.FC<{ appStyle?: string }> = ({ appStyle }) =>
   const speedIndex = Math.max(0, SPEEDS.findIndex(s => s >= st.speed - 0.001));
   const step = (d: number) => setSpeed(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, speedIndex + d))]);
   const missing = missingVoice(st);
-  // The voice is not part of the app: the first time it is offered as a download
+  // The voice is not part of the app: the first time it is offered as a download. The offer
+  // is wider than its column, so it is raised above the (hidden) buttons next to it,
+  // which would otherwise take its taps.
   if (missing) {
     const mb = Math.round((missing.size || 0) / 1e6);
     if (st.download !== null) {
       return (
-        <div className="flex items-center gap-2 h-8 font-sans" style={{ color: palette.text }}>
+        <div className="relative z-20 flex items-center gap-2 h-8 font-sans" style={{ color: palette.text }}>
           <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: palette.track }}>
             <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.round(st.download * 100)}%`, backgroundColor: palette.accent }} />
           </div>
@@ -32,7 +34,7 @@ export const ReadAloudSpeed: React.FC<{ appStyle?: string }> = ({ appStyle }) =>
     return (
       <button
         onClick={downloadVoice}
-        className="h-8 px-3 rounded-full flex items-center gap-1.5 text-[13px] font-bold font-sans whitespace-nowrap shadow-lg active:scale-95 transition-transform"
+        className="relative z-20 h-8 px-3 rounded-full flex items-center gap-1.5 text-[13px] font-bold font-sans whitespace-nowrap shadow-lg active:scale-95 transition-transform"
         style={{ backgroundColor: palette.accent, color: palette.onAccent }}
       >
         <Download size={14} />
