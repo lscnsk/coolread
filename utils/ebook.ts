@@ -360,7 +360,7 @@ export const parseFb2 = async (file: Blob, bookId: string): Promise<Partial<Book
                   
                   if (tag === 'section') {
                       // Only skip if child was separately indexed as a standalone chapter in sections
-                      if (sections.includes(child)) {
+                      if (sections.includes(child as HTMLElement)) {
                           return;
                       }
                       const subRes = serializeNode(child, curLevel + 1);

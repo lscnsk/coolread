@@ -3,7 +3,8 @@ import { Preferences } from '@capacitor/preferences';
 import { useSyncExternalStore } from 'react';
 import type { NowPlayingInfo } from './nowPlaying';
 
-// Reading aloud with the built-in offline voice (android/.../ReadAloudPlugin.java).
+// Reading aloud with the offline voice (android/.../ReadAloudPlugin.java). The voice is not
+// part of the APK: it is downloaded once, the first time read aloud is used (downloadVoice).
 // The text is split into sentences and handed to the native side, which reads them by
 // itself, so it goes on with the screen off, and asks for the next chapter when it gets
 // there. It reports the word being said, which is highlighted when the reader is on screen.
@@ -14,11 +15,16 @@ export interface Voice {
   name: string;
   lang: string;
   builtIn: boolean;
+  /** Android: false until the voice has been downloaded; size is the download in bytes. */
+  installed?: boolean;
+  size?: number;
 }
 
 interface ReadAloudPlugin {
   listVoices(): Promise<{ voices: Voice[] }>;
   prepare(o: { voice: string }): Promise<void>;
+  downloadVoice(o: { voice: string }): Promise<void>;
+  cancelDownload(): Promise<void>;
   speak(o: { voice: string; chapter: number; sentences: string[]; pauses: number[]; start: number; last: boolean; speed: number; title: string; info: NowPlayingInfo }): Promise<void>;
   append(o: { chapter: number; sentences: string[]; pauses?: number[]; last: boolean; title: string }): Promise<void>;
   pauseSpeech(): Promise<void>;
@@ -27,6 +33,7 @@ interface ReadAloudPlugin {
   setSpeechSpeed(o: { speed: number }): Promise<void>;
   stopSpeech(): Promise<void>;
   addListener(event: 'speech', cb: (e: { state?: string; chapter?: number; index?: number; word?: number; speed?: number }) => void): Promise<unknown>;
+  addListener(event: 'download', cb: (e: { voice: string; received: number; total: number }) => void): Promise<unknown>;
   addListener(event: 'need', cb: (e: { chapter: number }) => void): Promise<unknown>;
 }
 
@@ -66,9 +73,11 @@ interface State {
   voice: string | null;
   voices: Voice[];
   error: string | null;
+  /** Part of the voice downloaded so far, 0 to 1, while it is downloading. */
+  download: number | null;
 }
 
-let state: State = { open: false, playing: false, loading: false, speed: 1, voice: null, voices: [], error: null };
+let state: State = { open: false, playing: false, loading: false, speed: 1, voice: null, voices: [], error: null, download: null };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch };
@@ -130,6 +139,39 @@ export async function refreshVoices(): Promise<Voice[]> {
   const voice = voices.some(v => v.id === state.voice) ? state.voice : (voices.find(v => v.builtIn) || voices[0])?.id || null;
   set({ voices, voice });
   return voices;
+}
+
+/** The chosen voice when it still has to be downloaded (Android), otherwise null. */
+export const missingVoice = (st: State): Voice | null =>
+  (isNative && st.voices.find(v => v.id === st.voice && v.installed === false)) || null;
+
+let downloadListener = false;
+
+/** Downloads the chosen voice, then starts reading. */
+export async function downloadVoice() {
+  const v = missingVoice(state);
+  if (!v || state.download !== null) return;
+  if (!downloadListener) {
+    downloadListener = true;
+    Native.addListener('download', e => {
+      if (state.download !== null && e.total > 0) set({ download: Math.min(1, e.received / e.total) });
+    });
+  }
+  set({ download: 0, error: null });
+  try {
+    await Native.downloadVoice({ voice: v.id });
+  } catch (e: any) {
+    const cancelled = String(e?.message || e).includes('cancelled');
+    set({ download: null, error: cancelled ? null : 'Download failed' });
+    return;
+  }
+  await refreshVoices();
+  set({ download: null });
+  if (state.open) play();
+}
+
+export function cancelDownload() {
+  if (state.download !== null) Native.cancelDownload().catch(() => {});
 }
 
 export function setVoice(id: string) {
@@ -732,6 +774,7 @@ export async function play() {
     set({ error: state.voice ? null : 'No voice' });
     return;
   }
+  if (missingVoice(state)) return;
   if (isNative) return playNative(root);
   set({ playing: true, error: null });
   const sameText = builtFor === root && builtText === (root.textContent || '');
@@ -813,7 +856,7 @@ export function setOpen(open: boolean) {
   if (!open) stop();
   else {
     refreshVoices().then(() => {
-      if (isNative && state.voice) Native.prepare({ voice: state.voice }).catch(() => {});
+      if (isNative && state.voice && !missingVoice(state)) Native.prepare({ voice: state.voice }).catch(() => {});
     });
   }
   set({ open, error: null });

@@ -652,6 +652,23 @@ function transformChapterContent(
     }
   } catch (e) {}
 
+  // A dash of the intermediate width (used by steps 3.5 and 3.5.1)
+  const createIntermediateDash = (isItalic: boolean): Node => {
+    const dashSpan = doc.createElement('span');
+    dashSpan.className = 'reader-dash';
+    const glyphSpan = doc.createElement('span');
+    glyphSpan.className = 'reader-dash-glyph';
+    glyphSpan.textContent = '—';
+    if (isItalic) {
+      const emEl = doc.createElement('em');
+      emEl.appendChild(glyphSpan);
+      dashSpan.appendChild(emEl);
+    } else {
+      dashSpan.appendChild(glyphSpan);
+    }
+    return dashSpan;
+  };
+
   // 3.5. Ensure dash spacing rules:
   // - Dashes followed by a capital letter (dialogue/direct speech start): fixed compact spacing after dash (.dash-space)
   // - All other dashes (intra-sentence dashes, dialogue tags with lowercase): obey the same interval/spacing logic as words
@@ -695,21 +712,6 @@ function transformChapterContent(
       }
     }
 
-    const createIntermediateDash = (isItalic: boolean): Node => {
-      const dashSpan = doc.createElement('span');
-      dashSpan.className = 'reader-dash';
-      const glyphSpan = doc.createElement('span');
-      glyphSpan.className = 'reader-dash-glyph';
-      glyphSpan.textContent = '—';
-      if (isItalic) {
-        const emEl = doc.createElement('em');
-        emEl.appendChild(glyphSpan);
-        dashSpan.appendChild(emEl);
-      } else {
-        dashSpan.appendChild(glyphSpan);
-      }
-      return dashSpan;
-    };
 
     for (const node of textNodes) {
       const parent = node.parentNode;
@@ -732,7 +734,7 @@ function transformChapterContent(
 
       const effPrev = getEffectivePrev(node);
       const effNext = getEffectiveNext(node);
-      const isInsideItalic = Boolean(parent.closest && parent.closest('em, i'));
+      const isInsideItalic = Boolean((parent as Element).closest && (parent as Element).closest('em, i'));
 
       // Check boundary dash at the very end of text node followed by an element
       if (!dashExecRegex.test(text) && isBoundaryDash(text, node)) {
@@ -926,7 +928,7 @@ function transformChapterContent(
       const frag = doc.createDocumentFragment();
       for (const part of parts) {
         if (part === '—' || part === '―') {
-          const isInsideItalic = Boolean(parent.closest && parent.closest('em, i'));
+          const isInsideItalic = Boolean((parent as Element).closest && (parent as Element).closest('em, i'));
           frag.appendChild(createIntermediateDash(isInsideItalic));
         } else if (part) {
           frag.appendChild(doc.createTextNode(part));
@@ -4841,7 +4843,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
             const lineMultiplier = isCoverPage ? 1.4 : 1.6;
             const oneLineH = isCoverPage ? 20 : Math.round(fontSizePx * lineMultiplier);
 
-            const currentSlice = pageSlices[pageIndex] || pageSlices[0] || { startY: 0, endY: 0, textHeight: 500 };
+            const currentSlice: { startY: number; endY: number; textHeight?: number } = pageSlices[pageIndex] || pageSlices[0] || { startY: 0, endY: 0, textHeight: 500 };
             const currentSliceStart = isCoverPage ? 0 : (currentSlice.startY || 0);
             const currentSliceTextH = isCoverPage 
                 ? Math.max(200, screenH - totalCurtainsH - sat - sab - 40)

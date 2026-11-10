@@ -30,6 +30,7 @@ export interface Book {
   type: BookType;
   format?: 'epub' | 'fb2' | 'pdf' | 'comic';
   size?: number;
+  pageCount?: number;
 }
 
 export interface PlayerState {

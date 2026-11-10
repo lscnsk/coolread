@@ -5,7 +5,6 @@ import { motion } from 'motion/react';
 import LibrarySidebar from './components/LibrarySidebar';
 import ChapterSidebar from './components/ChapterSidebar';
 import PlayerControls from './components/PlayerControls';
-import EBookReader from './components/EBookReader';
 import EBookControls from './components/EBookControls';
 import { Book, PersistedState, AppMode, Chapter } from './types';
 import { calculateTotalProgress } from './utils/time';
@@ -16,6 +15,25 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { TextZoom } from '@capacitor/text-zoom';
 // PDF and comic reader pulls in pdf.js (~470 KB); load it only when such a book is opened.
 const PDFReader = lazy(() => import('./components/PDFReader'));
+// The reader and the catalogs are large and not needed to draw the first screen, so they
+// are separate files. They are fetched right after the first screen is drawn (see the
+// effect in App), so opening a book or a catalog does not wait for them.
+const loadLater = {
+  reader: () => import('./components/EBookReader'),
+  catalogSidebar: () => import('./components/CatalogSidebar'),
+  catalog: () => import('./components/CatalogView'),
+  opds: () => import('./components/OpdsView'),
+  mangaDex: () => import('./components/MangaDexView'),
+};
+function later<P extends object>(load: () => Promise<{ default: React.ComponentType<P> }>): React.FC<P> {
+  const View = lazy(load);
+  return (props: P) => <Suspense fallback={null}><View {...(props as any)} /></Suspense>;
+}
+const EBookReader = later(loadLater.reader);
+const CatalogSidebar = later(() => loadLater.catalogSidebar().then(m => ({ default: m.CatalogSidebar })));
+const CatalogView = later(() => loadLater.catalog().then(m => ({ default: m.CatalogView })));
+const OpdsView = later(() => loadLater.opds().then(m => ({ default: m.OpdsView })));
+const MangaDexView = later(() => loadLater.mangaDex().then(m => ({ default: m.MangaDexView })));
 import { ImageLightbox } from './components/ImageLightbox';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { NowPlaying, accentOf, coverData, isNativePlayer } from './utils/nowPlaying';
@@ -26,10 +44,6 @@ import { AppHeader } from './components/AppHeader';
 import { AudioBookDetailsModal } from './components/AudioBookDetailsModal';
 import { useSettings } from './hooks/useSettings';
 import { useBookHistory } from './hooks/useBookHistory';
-import { CatalogView } from './components/CatalogView';
-import { CatalogSidebar } from './components/CatalogSidebar';
-import { OpdsView } from './components/OpdsView';
-import { MangaDexView } from './components/MangaDexView';
 import { openSite, barColors } from './utils/webBrowser';
 import { setTelegramBack, setTelegramColors } from './utils/telegram';
 import { OpdsSource, loadOpdsSources, saveOpdsSources } from './utils/opds';
@@ -43,6 +57,11 @@ import { saveBookToDB, deleteBookContent, stripChapterContent } from './utils/db
 
 
 function App() {
+  useEffect(() => {
+    const t = setTimeout(() => Object.values(loadLater).forEach(load => load().catch(() => {})), 300);
+    return () => clearTimeout(t);
+  }, []);
+
   // --- State ---
   const [mode, setMode] = useState<AppMode>(() => {
     try {

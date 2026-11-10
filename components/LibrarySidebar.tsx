@@ -20,7 +20,7 @@ interface LibrarySidebarProps {
   onExternalFilePicked?: (files: FileList | File[] | File) => void;
   onExternalFolderPicked?: (files: FileList) => void;
   onDeleteBook?: (bookId: string) => void;
-  mode: 'ebook' | 'audio';
+  mode: 'ebook' | 'audio' | 'pdf' | 'comic';
   readerFont?: string;
   onReaderFontChange?: (font: string) => void;
   customFonts?: { name: string; dataUrl: string }[];

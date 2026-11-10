@@ -23,7 +23,8 @@ import {
   Sun,
   Moon,
   Pilcrow,
-  MoveRight
+  MoveRight,
+  Download
 } from 'lucide-react';
 
 export {
@@ -51,5 +52,6 @@ export {
   Sun,
   Moon,
   Pilcrow,
-  MoveRight
+  MoveRight,
+  Download
 };
