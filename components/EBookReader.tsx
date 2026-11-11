@@ -1,3 +1,4 @@
+import { activeVariantFor } from '../utils/styleVariants';
 import { useRsvp } from '../hooks/useRsvp';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Book } from '../types';
@@ -4966,8 +4967,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                                     }}
                                     className={`flex items-center gap-2 px-6 py-2 rounded-full border transition-all group shadow-md opacity-80 hover:opacity-100 ${nextBtnClasses}`}
                                  >
-                                    <span className={appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : (appStyle === 'Dragon' ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
-                                        {appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Dragon' ? 'Roll for Initiative 🎲' : appStyle === 'Marcel' ? 'Turn page 🍵' : 'Continue')))}
+                                    <span className={activeVariantFor(appStyle) ? `${({ Byte: 'text-lg', Mint: 'text-lg' } as Record<string, string>)[activeVariantFor(appStyle)!.name] || 'text-sm'} ${activeVariantFor(appStyle)!.fontClass} tracking-wider` : appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : (appStyle === 'Dragon' ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
+                                        {activeVariantFor(appStyle) ? activeVariantFor(appStyle)!.nextChapter : appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Dragon' ? 'Roll for Initiative 🎲' : appStyle === 'Marcel' ? 'Turn page 🍵' : 'Continue')))}
                                     </span>
                                     <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                                  </button>

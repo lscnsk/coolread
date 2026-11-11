@@ -1,3 +1,4 @@
+import { activeVariantFor } from './styleVariants';
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 // The player notification (android/.../PlaybackService.java), shared by audiobooks and
@@ -22,6 +23,8 @@ export const NowPlaying = registerPlugin<NowPlayingPlugin>('NowPlaying');
 
 /** Accent of each app style, for the notification. */
 export function accentOf(appStyle?: string): string {
+  const v = activeVariantFor(appStyle);
+  if (v) return v.accent;
   switch (appStyle) {
     case 'Marcel': return '#544372';
     case 'Bimbo': return '#BE123C';

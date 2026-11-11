@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { variantOf } from '../utils/styleVariants';
 
 interface EmptyStateProps {
   isLoading: boolean;
@@ -6,6 +7,8 @@ interface EmptyStateProps {
   mode: 'ebook' | 'audio' | 'pdf' | 'comic';
   isNative: boolean;
   appStyle: string;
+  /** The chosen style, when it is one of the added styles built on appStyle */
+  styleName?: string;
   onExternalFilePicked?: (files: FileList | File[] | File) => void;
   onExternalFolderPicked?: (files: File[] | FileList) => void;
   currentBook: any;
@@ -20,6 +23,7 @@ export function EmptyState({
   mode, 
   isNative, 
   appStyle,
+  styleName,
   onExternalFilePicked,
   onExternalFolderPicked,
   currentBook,
@@ -31,6 +35,7 @@ export function EmptyState({
   const isSurf = appStyle === 'Surf';
   const isFF = appStyle === 'Final Fantasy' || appStyle === 'Final';
   const isDragon = appStyle === 'Dragon';
+  const v = variantOf(styleName);
 
   const buttonStyle = isMarcel
     ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:border-[#AC97D7]'
@@ -66,7 +71,7 @@ export function EmptyState({
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 mt-16 z-0 relative">
         <div className="text-4xl emoji">
-           {isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚'}
+           {v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚'}
         </div>
         <div className="max-w-xs w-full space-y-3">
            {/* Add books */}
@@ -147,11 +152,13 @@ export function EmptyState({
     <div className="flex-1 flex flex-col items-center justify-center text-[#444] space-y-4 mt-16 z-0 relative">
       <div className="text-6xl emoji">
         {mode === 'audio'
-          ? isDragon ? '📯' : isFF ? '🎼' : isBimbo ? '💅' : isSurf ? '🏄‍♂️' : isMarcel ? '☕' : '💿'
-          : isDragon ? '📜' : isFF ? '📜' : isBimbo ? '🩰' : isSurf ? '🌊' : isMarcel ? '🪻' : '📄'}
+          ? v ? v.audioEmoji : isDragon ? '📯' : isFF ? '🎼' : isBimbo ? '💅' : isSurf ? '🏄‍♂️' : isMarcel ? '☕' : '💿'
+          : v ? v.ebookEmoji : isDragon ? '📜' : isFF ? '📜' : isBimbo ? '🩰' : isSurf ? '🌊' : isMarcel ? '🪻' : '📄'}
       </div>
       <p>
-        {isDragon
+        {v
+          ? v.emptyPrompt
+          : isDragon
           ? 'Select a scroll or artifact 🛡️'
           : isFF
           ? 'Select a tome or crystal 🔮'

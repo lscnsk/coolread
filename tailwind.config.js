@@ -20,6 +20,10 @@ export default {
         dragon: ['"Uncial Antiqua"', 'cursive'],
         surf: ['"Caveat"', 'cursive'],
         marcel: ['"Parisienne"', 'cursive'],
+        code: ['"Share Tech Mono"', 'ui-monospace', 'monospace'],
+        byte: ['"VT323"', 'ui-monospace', 'monospace'],
+        mint: ['"Satisfy"', 'cursive'],
+        jazz: ['"Poiret One"', 'serif'],
       }
     },
   },

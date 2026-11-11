@@ -104,7 +104,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
 
           /* Click background overrides */
           @media (hover: hover) and (pointer: fine) {
-          .bimbo-mode .bimbo-sidebar button:hover,
+          .bimbo-mode .bimbo-sidebar button:not(.style-btn):hover,
           .bimbo-mode .bimbo-sidebar .hover\\:bg-\\[\\#363330\\]:hover,
           .bimbo-mode .bimbo-sidebar .hover\\:bg-\\[\\#45413e\\]:hover,
           .bimbo-mode .bimbo-sidebar li div div:hover,
@@ -224,7 +224,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
 
           /* Click background overrides */
           @media (hover: hover) and (pointer: fine) {
-          .surf-mode .bimbo-sidebar button:hover,
+          .surf-mode .bimbo-sidebar button:not(.style-btn):hover,
           .surf-mode .bimbo-sidebar .hover\\:bg-\\[\\#363330\\]:hover,
           .surf-mode .bimbo-sidebar .hover\\:bg-\\[\\#45413e\\]:hover,
           .surf-mode .bimbo-sidebar li div div:hover,
