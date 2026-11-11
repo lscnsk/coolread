@@ -364,7 +364,7 @@ function App() {
       } else {
         setTheme('dark');
       }
-    });
+    }, barColors(style).background);
   };
 
 
