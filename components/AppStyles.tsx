@@ -103,6 +103,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           }
 
           /* Click background overrides */
+          @media (hover: hover) and (pointer: fine) {
           .bimbo-mode .bimbo-sidebar button:hover,
           .bimbo-mode .bimbo-sidebar .hover\\:bg-\\[\\#363330\\]:hover,
           .bimbo-mode .bimbo-sidebar .hover\\:bg-\\[\\#45413e\\]:hover,
@@ -115,6 +116,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           .bimbo-mode .bimbo-sidebar .bg-\\[\\#363330\\]:hover,
           .bimbo-mode .bimbo-sidebar .bg-\\[\\#45413e\\]:hover {
               background-color: #FFF0F5 !important;
+          }
           }
           .bimbo-mode * {
               -webkit-tap-highlight-color: transparent !important;
@@ -221,6 +223,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           }
 
           /* Click background overrides */
+          @media (hover: hover) and (pointer: fine) {
           .surf-mode .bimbo-sidebar button:hover,
           .surf-mode .bimbo-sidebar .hover\\:bg-\\[\\#363330\\]:hover,
           .surf-mode .bimbo-sidebar .hover\\:bg-\\[\\#45413e\\]:hover,
@@ -233,6 +236,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           .surf-mode .bimbo-sidebar .bg-\\[\\#363330\\]:hover,
           .surf-mode .bimbo-sidebar .bg-\\[\\#45413e\\]:hover {
               background-color: #F0F9FF !important;
+          }
           }
           .surf-mode * {
               -webkit-tap-highlight-color: transparent !important;
@@ -321,7 +325,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           .marcel-mode .border-transparent { border-color: transparent !important; }
           .marcel-mode input::placeholder { color: #766594 !important; opacity: 0.7 !important; }
           
-          .marcel-mode .hover\\:text-\\[\\#fffff0\\]:hover { color: #1A1A1A !important; }
+          @media (hover: hover) and (pointer: fine) { .marcel-mode .hover\\:text-\\[\\#fffff0\\]:hover { color: #1A1A1A !important; } }
         `}</style>
       )}
       {isDarkMarcel && (
@@ -371,7 +375,7 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
           .marcel-mode .bimbo-reader-canvas .border-\\[\\#57534e\\] { border-color: #5C4434 !important; }
           .marcel-mode .bimbo-reader-canvas .border-transparent { border-color: transparent !important; }
           
-          .marcel-mode .bimbo-reader-canvas .hover\\:text-\\[\\#fffff0\\]:hover { color: #F4EBE1 !important; }
+          @media (hover: hover) and (pointer: fine) { .marcel-mode .bimbo-reader-canvas .hover\\:text-\\[\\#fffff0\\]:hover { color: #F4EBE1 !important; } }
         `}</style>
       )}
     </>

@@ -1,4 +1,7 @@
 export default {
+  // Hover looks only on devices with a real mouse: on a touch screen a tapped button
+  // otherwise stays lit until you tap somewhere else.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "./index.html",
     "./components/**/*.{js,ts,jsx,tsx}",

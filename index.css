@@ -960,3 +960,16 @@ button, [role="button"], a {
 @media (prefers-reduced-motion: reduce) {
   [data-reader-container] > *, .fade-in { animation: none; }
 }
+
+/* Changing the app style, light/dark or styled text: the whole screen cross-fades
+   (see utils/smoothSwitch.ts) instead of parts of it jumping one after another */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Where cross-fading is not available, colours ease over for a moment */
+.style-switching *, .style-switching *::before, .style-switching *::after {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease,
+    fill 0.4s ease, stroke 0.4s ease, box-shadow 0.4s ease !important;
+}

@@ -4737,9 +4737,11 @@ const EBookReader: React.FC<EBookReaderProps> = ({
             cursor: pointer;
             opacity: 0.75;
           }
+          @media (hover: hover) and (pointer: fine) {
           .reader-content a:hover {
             opacity: 1;
             text-decoration-thickness: 2px;
+          }
           }
           
           /* Search highlight without shifting text layout */
@@ -4829,9 +4831,11 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              cursor: pointer;
           }
 
+          @media (hover: hover) and (pointer: fine) {
           .reader-content .note-back-link:hover {
              background: rgba(128,128,128,0.35);
              transform: scale(1.08);
+          }
           }
 
           .reader-content .note-divider {
