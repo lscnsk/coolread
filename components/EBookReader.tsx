@@ -1239,6 +1239,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
   readerFont = 'Literata'
 }) => {
   const readerFontCSS = getFontFamilyCSS(readerFont);
+  const readerInk = activeVariantFor(appStyle)?.reader[theme === 'light' ? 'light' : 'dark'];
 
   // Dots after ! and ? ("!..", "?..") are drawn at the size of the dot in ! and ?,
   // measured from the reading font, so all three dots look alike.
@@ -4120,18 +4121,18 @@ const EBookReader: React.FC<EBookReaderProps> = ({
           .reader-content em.footnote-italic,
           .reader-content span.footnote-italic { 
              font-style: italic !important; 
-             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#db2777' : '#fb7185'} !important;` : ''}
-             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#b45309' : '#93c5fd'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
+             ${readerInk ? `color: ${readerInk.italic} !important;` : appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#db2777' : '#fb7185'} !important;` : ''}
+             ${!readerInk && (appStyle === 'Final' || appStyle === 'Final Fantasy') ? `color: ${theme === 'light' ? '#b45309' : '#93c5fd'} !important;` : ''}
+             ${!readerInk && appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
           }
           .reader-content .it-corr {
              margin-right: 0.08em;
           }
           .reader-content strong, .reader-content b { 
              font-weight: bold !important; 
-             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#f472b6'} !important;` : ''}
-             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#1e3a8a' : '#fcd34d'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
+             ${readerInk ? `color: ${readerInk.bold} !important;` : appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#f472b6'} !important;` : ''}
+             ${!readerInk && (appStyle === 'Final' || appStyle === 'Final Fantasy') ? `color: ${theme === 'light' ? '#1e3a8a' : '#fcd34d'} !important;` : ''}
+             ${!readerInk && appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
           }
 
           /* Reset for standard blocks to prevent styling leaks from previous tags */
@@ -4207,9 +4208,9 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 font-weight: bold;
                 font-family: ${readerFontCSS} !important;
                 color: inherit;
-                ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
-                ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#2563eb' : '#60a5fa'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 8px rgba(96,165,250,0.4)'} !important;` : ''}
-                ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
+                ${readerInk ? `color: ${readerInk.cap} !important; text-shadow: ${readerInk.capGlow && theme !== 'light' ? `0 0 6px ${readerInk.capGlow}` : 'none'} !important;` : appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
+                ${!readerInk && (appStyle === 'Final' || appStyle === 'Final Fantasy') ? `color: ${theme === 'light' ? '#2563eb' : '#60a5fa'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 8px rgba(96,165,250,0.4)'} !important;` : ''}
+                ${!readerInk && appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
             }
           ` : ''}
 

@@ -4,6 +4,7 @@ import { Type, Sun, Moon, Pilcrow, Zap, BookOpen, Scroll, Headphones } from 'luc
 import { ReadAloudSpeed, ReadAloudTransport } from './ReadAloudPanel';
 import { setOpen as setReadAloudOpen, useReadAloud } from '../utils/readAloud';
 import { Chapter } from '../types';
+import { activeVariantFor } from '../utils/styleVariants';
 
 interface EBookControlsProps {
   fontSize: number;
@@ -56,6 +57,8 @@ const EBookControls: React.FC<EBookControlsProps> = ({
 }) => {
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
+  // New styles colour the bionic button like their bold text
+  const bionicInk = activeVariantFor(appStyle)?.reader[theme === 'light' ? 'light' : 'dark'].bold;
   const isMarcel = appStyle === 'Marcel';
   const isDragon = appStyle === 'Dragon';
   const isFF = appStyle === 'Final' || appStyle === 'Final Fantasy';
@@ -217,9 +220,10 @@ const EBookControls: React.FC<EBookControlsProps> = ({
                       onClick={onToggleBionic}
                       className={`${voiceMode ? 'opacity-0 scale-50' : ''} w-[30px] sm:w-8 h-8 flex items-center justify-center rounded-lg active:scale-90 transition-all duration-200 select-none text-[15px] ${
                         isBionic 
-                          ? `font-black ${isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284c7]' : 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.6)]'}` 
+                          ? `font-black ${bionicInk ? '' : isMarcel ? 'text-[#544372]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0284c7]' : 'text-violet-400 drop-shadow-[0_0_8px_rgba(167,139,250,0.6)]'}` 
                           : `font-normal ${isMarcel ? 'text-[#2F2440]/40 hover:text-[#2F2440]/70' : isBimbo ? 'text-[#BE123C]/40 hover:text-[#BE123C]/70' : isSurf ? 'text-[#7dd3fc] hover:text-[#0ea5e9]' : 'text-[#888] hover:text-[#fffff0]/70'}`
                       }`}
+                      style={isBionic && bionicInk ? { color: bionicInk, filter: theme === 'light' ? undefined : `drop-shadow(0 0 6px ${bionicInk}99)` } : undefined}
                       title="Bionic reading mode"
                     >
                        B

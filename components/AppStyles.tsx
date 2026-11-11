@@ -201,7 +201,8 @@ export function AppStyles({ appStyle, theme }: AppStylesProps) {
               color: #0C4A6E !important;
           }
           /* The top bar is opaque, like the reader's bottom bar */
-          .surf-mode .bimbo-header.bimbo-panel { background-color: #FFFFFF !important; }
+          /* (class repeated so it also outranks the recoloured copies a new style adds after it) */
+          .surf-mode .bimbo-header.bimbo-header.bimbo-panel { background-color: #FFFFFF !important; }
           .surf-mode .bimbo-panel button,
           .surf-mode .bimbo-panel span,
           .surf-mode .bimbo-panel h2,

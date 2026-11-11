@@ -54,7 +54,7 @@ import { getStoredCatalogBooks, syncCatalogFromGitHub, lastCatalogSyncTime, down
 import { parseM4AChapters } from './utils/mp4chapters';
 import { findLibraryBook, hasNewEdition, rememberEdition, setEditionRemap } from './utils/catalogEditions';
 import { saveBookToDB, deleteBookContent, stripChapterContent } from './utils/db';
-import { smoothSwitch } from './utils/smoothSwitch';
+import { smoothSwitch, instantSwitch } from './utils/smoothSwitch';
 import { applyStyleVariant, baseStyleOf, noteChosenStyle, variantOf } from './utils/styleVariants';
 
 
@@ -1532,10 +1532,10 @@ function App() {
                                 onOpenSearch={toggleSearch}
                                 chapters={currentBook.chapters}
                                 theme={theme}
-                                onToggleTheme={() => smoothSwitch(() => setTheme(p => p === 'dark' ? 'light' : 'dark'))}
+                                onToggleTheme={() => instantSwitch(() => setTheme(p => p === 'dark' ? 'light' : 'dark'))}
                                 show={!isImmersive}
                                 isStyledMode={isStyledMode}
-                                onToggleStyledMode={() => smoothSwitch(() => setIsStyledMode(!isStyledMode))}
+                                onToggleStyledMode={() => instantSwitch(() => setIsStyledMode(!isStyledMode))}
                                 isPdfSource={isCurrentBookOriginallyPdf}
                                 currentBookFormat={currentBook?.format || null}
                                 onTogglePdfFormat={handleTogglePdfFormat}

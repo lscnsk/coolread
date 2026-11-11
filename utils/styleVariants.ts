@@ -32,11 +32,14 @@ export interface StyleVariant {
   accent: string;
   /** base colour -> this style's colour */
   palette: Record<string, string>;
+  /** Text colours in the reader: bold words (and bionic reading), italics, drop cap */
+  reader: Record<'dark' | 'light', { bold: string; italic: string; cap: string; capGlow?: string }>;
 }
 
 export const STYLE_VARIANTS: Record<string, StyleVariant> = {
   Code: {
-    name: 'Code', base: 'Dragon', theme: 'dark',
+    name: 'Code',
+    reader: { dark: { bold: '#4ade80', italic: '#a7f3c0', cap: '#22c55e', capGlow: 'rgba(34,197,94,0.5)' }, light: { bold: '#15803d', italic: '#166534', cap: '#15803d' } }, base: 'Dragon', theme: 'dark',
     title: 'Code', titleEmoji: '💾',
     titleClass: 'font-code text-2xl md:text-3xl text-[#86efac] drop-shadow-md',
     nameTracking: 'tracking-[0.05em]', readTracking: 'tracking-[0.05em]', emojiSize: 'text-4.5xl md:text-5.5xl',
@@ -56,7 +59,8 @@ export const STYLE_VARIANTS: Record<string, StyleVariant> = {
     },
   },
   Byte: {
-    name: 'Byte', base: 'Final', theme: 'dark',
+    name: 'Byte',
+    reader: { dark: { bold: '#ff4fd8', italic: '#5eead4', cap: '#5eead4', capGlow: 'rgba(255,79,216,0.45)' }, light: { bold: '#a21caf', italic: '#0f766e', cap: '#7c3aed' } }, base: 'Final', theme: 'dark',
     title: 'Byte', titleEmoji: '👾',
     titleClass: 'font-byte text-[40px] leading-none text-[#5eead4] drop-shadow-[0_0_3px_#ff4fd866]',
     nameTracking: 'tracking-normal', readTracking: 'tracking-normal', emojiSize: 'text-4.5xl md:text-5.5xl',
@@ -76,7 +80,8 @@ export const STYLE_VARIANTS: Record<string, StyleVariant> = {
     },
   },
   Mint: {
-    name: 'Mint', base: 'Surf', theme: 'light',
+    name: 'Mint',
+    reader: { dark: { bold: '#a3c97a', italic: '#c5dba8', cap: '#8db66b' }, light: { bold: '#4e7331', italic: '#6e9a46', cap: '#5b8539' } }, base: 'Surf', theme: 'light',
     title: 'Mint', titleEmoji: '🌿',
     titleClass: 'font-mint font-normal text-[34px] md:text-5xl text-[#5B8538] drop-shadow-md',
     nameTracking: 'tracking-normal pr-1.5 md:pr-2', readTracking: 'tracking-normal pl-0.5', emojiSize: 'text-4.5xl md:text-5.5xl',
@@ -94,7 +99,8 @@ export const STYLE_VARIANTS: Record<string, StyleVariant> = {
     },
   },
   Jazz: {
-    name: 'Jazz', base: 'Cool', theme: 'dark',
+    name: 'Jazz',
+    reader: { dark: { bold: '#d4b46a', italic: '#e8d39c', cap: '#d4b46a', capGlow: 'rgba(212,180,106,0.4)' }, light: { bold: '#8a6d2b', italic: '#6b5520', cap: '#8a6d2b' } }, base: 'Cool', theme: 'dark',
     title: 'Jazz', titleEmoji: '🥂',
     titleClass: 'font-jazz font-bold text-2xl md:text-3xl text-[#f1dfae]',
     nameTracking: 'tracking-[0.05em]', readTracking: 'tracking-[0.05em]', emojiSize: 'text-4.5xl md:text-5.5xl',

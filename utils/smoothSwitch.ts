@@ -44,3 +44,14 @@ export function smoothSwitch(update: () => void, veilColor?: string) {
     })
     .catch(() => { try { apply(); } finally { done(); } });
 }
+
+// Changes something small (light/dark theme, drop caps) at once, with no veil over the screen:
+// the elements' colour transitions are switched off for one frame, so the change is not drawn
+// in several steps.
+export function instantSwitch(update: () => void) {
+  const root = document.documentElement;
+  root.classList.add('style-switching');
+  try { flushSync(update); } finally {
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('style-switching')));
+  }
+}
