@@ -244,13 +244,13 @@ const PDFReader: React.FC<PDFReaderProps> = ({
         const pdf = await loadingTask.promise;
 
         if (isAborted) {
-          try { pdf.destroy(); } catch (e) {}
+          try { pdf.loadingTask.destroy(); } catch (e) {}
           return;
         }
 
         // Clean up previous PDF document proxy if existing
         if (pdfDocRef.current) {
-          try { pdfDocRef.current.destroy(); } catch (e) {}
+          try { pdfDocRef.current.loadingTask.destroy(); } catch (e) {}
         }
 
         loadedDoc = pdf;
@@ -268,9 +268,9 @@ const PDFReader: React.FC<PDFReaderProps> = ({
     return () => {
       isAborted = true;
       if (loadedDoc) {
-        try { loadedDoc.destroy(); } catch (e) {}
+        try { loadedDoc.loadingTask.destroy(); } catch (e) {}
       } else if (pdfDocRef.current) {
-        try { pdfDocRef.current.destroy(); } catch (e) {}
+        try { pdfDocRef.current.loadingTask.destroy(); } catch (e) {}
         pdfDocRef.current = null;
       }
     };
@@ -346,6 +346,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
         if (!context) return;
 
         const renderContext = {
+          canvas,
           canvasContext: context,
           viewport: renderViewport,
           background: 'rgb(255, 255, 255)'
@@ -434,7 +435,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   };
 
   // Touch Gesture Utilities represent pinch scaling distances
-  const getDistance = (t1: Touch, t2: Touch) => {
+  const getDistance = (t1: { clientX: number; clientY: number }, t2: { clientX: number; clientY: number }) => {
     return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
   };
 

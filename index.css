@@ -948,3 +948,15 @@ button, [role="button"], a {
 @keyframes sampler-swap-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
 .sampler-swap-in { animation: sampler-swap-in 0.28s ease-out; }
 .sampler-glow.sampler-swap-in { animation: sampler-swap-in 0.28s ease-out, sampler-glow-pulse 2.6s ease-in-out infinite; }
+
+/* A screen that takes the place of another (library, book, catalog) fades in instead of
+   snapping. Opacity only: a transform would move the fixed panels inside for its duration. */
+@keyframes view-in { from { opacity: 0; } }
+[data-reader-container] > * { animation: view-in 0.22s ease-out; }
+/* Overlays: the picture viewer, the "please wait" screen */
+.fade-in { animation: view-in 0.25s ease-out; }
+/* Side panels: start fast and settle softly */
+.ease-panel { transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+@media (prefers-reduced-motion: reduce) {
+  [data-reader-container] > *, .fade-in { animation: none; }
+}

@@ -59,7 +59,7 @@ const webPwa = (): Plugin => ({
       }
     };
     walk(out);
-    const precache = files.filter(f => f !== 'sw.js' && !f.startsWith('_') && !f.endsWith('.map')).sort();
+    const precache = files.filter(f => f !== 'sw.js' && !f.startsWith('_') && !(f.startsWith('ort/') && f.endsWith('.wasm')) && !f.endsWith('.map')).sort();
     const version = crypto.createHash('sha1').update(precache.join('|') + precache.map(f => fs.statSync(path.join(out, f)).size).join('|')).digest('hex').slice(0, 10);
     const sw = fs.readFileSync(path.resolve(__dirname, 'web-pwa/sw.template.js'), 'utf8')
       .replace('__VERSION__', version)
@@ -69,7 +69,7 @@ const webPwa = (): Plugin => ({
 });
 
 // Lite version for Telegram (Mini App), built with `npm run build:telegram` into dist-telegram/.
-// The web version without read aloud; Telegram's script gives the back button and colours.
+// The web version with fewer book sites; Telegram's script gives the back button and colours.
 // No service worker: Telegram needs the internet to open the app anyway.
 const isTelegram = process.env.VITE_TARGET === 'telegram';
 const telegramLite = (): Plugin => ({
@@ -89,9 +89,36 @@ const telegramLite = (): Plugin => ({
   },
 });
 
+// The Silero voice of the web and Telegram versions runs on ONNX Runtime, whose WebAssembly
+// file (11 MB) and the small script that starts it are put next to the app in ort/. The big
+// file is fetched once, together with the voice (utils/silero/store.ts). The Android build
+// has its own runtime and does not get them.
+const ORT_FILES = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
+const ortFile = (name: string) => path.resolve(__dirname, 'node_modules/onnxruntime-web/dist', name);
+const voiceRuntime = (): Plugin => ({
+  name: 'voice-runtime',
+  // Before web-pwa lists the files for the service worker (which leaves the big one out)
+  enforce: 'pre',
+  configureServer(server) {
+    for (const name of ORT_FILES) {
+      server.middlewares.use('/ort/' + name, (_req, res) => {
+        res.setHeader('Content-Type', name.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
+        fs.createReadStream(ortFile(name)).pipe(res);
+      });
+    }
+  },
+  closeBundle() {
+    if (!isWeb && !isTelegram) return;
+    const dir = path.resolve(__dirname, isWeb ? 'dist-web' : 'dist-telegram', 'ort');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of ORT_FILES) fs.copyFileSync(ortFile(name), path.join(dir, name));
+  },
+});
+
 export default defineConfig({
   base: './',
-  plugins: [react(), woff2Only(), flavorHtml(), webPwa(), telegramLite()],
+  plugins: [react(), woff2Only(), flavorHtml(), voiceRuntime(), webPwa(), telegramLite()],
+  worker: { format: 'es' },
   resolve: {
     alias: {
       util: path.resolve(__dirname, './utils/util-polyfill.ts'),

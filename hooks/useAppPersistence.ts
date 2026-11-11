@@ -499,9 +499,9 @@ export function useAppPersistence({
         setIsLoading(true);
         try {
             let fileToParse: File | Blob | null = null;
-            if (book.file instanceof Blob || book.file instanceof File) {
+            if ((book.file as any) instanceof Blob) {
                 fileToParse = book.file;
-            } else if (book.chapters?.[0]?.file instanceof Blob || book.chapters?.[0]?.file instanceof File) {
+            } else if ((book.chapters?.[0]?.file as any) instanceof Blob) {
                 fileToParse = book.chapters[0].file;
             } else if ((book as any).file) {
                 fileToParse = (book as any).file;

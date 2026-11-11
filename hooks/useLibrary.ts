@@ -39,7 +39,7 @@ interface UseLibraryProps {
     bookProgressMap: Record<string, PersistedState>;
     setBookProgressMap: React.Dispatch<React.SetStateAction<Record<string, PersistedState>>>;
     setBookMetadataMap: React.Dispatch<React.SetStateAction<Record<string, any>>>;
-    saveMetadata: (id: string, title: string, author: string, coverUrl?: string) => void;
+    saveMetadata: (id: string, title: string, author: string, coverUrl?: string, format?: string, series?: string) => void;
     deleteBookHistory: (id: string, title?: string) => Promise<void>;
     handleSelectBook: (book: Book, specificProgressMap?: Record<string, PersistedState>) => Promise<void>;
     saveState: (isClosingApp?: boolean) => Promise<PersistedState | null>;
@@ -189,7 +189,7 @@ export function useLibrary({
 
   const handleExternalFilePicked = async (
     files: File | File[] | FileList,
-    metadata?: { title?: string; author?: string; coverUrl?: string; pageCount?: number }
+    metadata?: { title?: string; author?: string; series?: string; coverUrl?: string; pageCount?: number }
   ) => {
       setIsLoading(true);
       try {
@@ -221,7 +221,7 @@ export function useLibrary({
           if (ebookFiles.length === 0) return;
           fileArray = ebookFiles;
 
-          const newQueue: { folderName: string, author?: string, bookObject: Book, files: File[], allFiles: File[] }[] = [];
+          const newQueue: { folderName: string, author?: string, series?: string, extractedCover?: string, bookObject: Book, files: File[], allFiles: File[] }[] = [];
 
           for (let i = 0; i < fileArray.length; i++) {
               const file = fileArray[i];
@@ -253,7 +253,7 @@ export function useLibrary({
                   coverUrl: finalCover,
                   pageCount: metadata?.pageCount,
                   type: newType,
-                  format: format || (lowerName.endsWith('.epub') ? 'epub' : (lowerName.endsWith('.fb2') ? 'fb2' : '')),
+                  format: (format || (lowerName.endsWith('.epub') ? 'epub' : (lowerName.endsWith('.fb2') ? 'fb2' : ''))) as Book['format'],
                   size: file.size,
                   chapters: [{
                       name: finalTitle,
@@ -593,7 +593,7 @@ export function useLibrary({
 
                         if (!extractedCover && common.picture && common.picture.length > 0) {
                             const pic = common.picture[0];
-                            const blob = new Blob([pic.data], { type: pic.format });
+                            const blob = new Blob([pic.data as BlobPart], { type: pic.format });
                             extractedCover = URL.createObjectURL(blob);
                             coverFile = blob as File;
                         }
@@ -902,7 +902,7 @@ export function useLibrary({
       duration: 0
     }));
 
-    const persistedCoverFile = imageFile || (coverFile && (coverFile instanceof Blob || coverFile instanceof File) ? (coverFile as File) : undefined);
+    const persistedCoverFile = imageFile || (coverFile && ((coverFile as any) instanceof Blob || (coverFile as any) instanceof File) ? (coverFile as File) : undefined);
 
     const newBook: Book = {
       id: newBookId,
@@ -950,7 +950,7 @@ export function useLibrary({
             dur = meta.format?.duration || 0;
             if (!newBook.coverUrl && meta.common?.picture && meta.common.picture.length > 0) {
               const pic = meta.common.picture[0];
-              const blob = new Blob([pic.data], { type: pic.format });
+              const blob = new Blob([pic.data as BlobPart], { type: pic.format });
               const bgCoverUrl = URL.createObjectURL(blob);
               newBook.coverUrl = bgCoverUrl;
               newBook.coverFile = blob as File;

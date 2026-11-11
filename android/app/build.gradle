@@ -14,17 +14,15 @@ android {
         applicationId "com.coolread.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 113
-        versionName "2.13"
+        versionCode 119
+        versionName "2.14"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // 64-bit phones only: the speech engine's native libraries are large
+        // 64-bit phones only: the speech engine's native library is large
         ndk { abiFilters 'arm64-v8a' }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
-            // The built-in voice is read straight from the APK
-            noCompress 'onnx'
         }
     }
     // Two apps from one code base: CoolRead and BimboRead (pink, Bimbo style).

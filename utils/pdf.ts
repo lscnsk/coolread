@@ -46,11 +46,11 @@ export const parsePdf = async (file: Blob, bookId: string): Promise<Partial<Book
             new Promise<null>(res => setTimeout(() => res(null), 1500))
         ]);
         if (metadata && metadata.info) {
-            if (metadata.info.Title && metadata.info.Title.trim()) {
-                title = metadata.info.Title;
+            if ((metadata.info as any).Title && (metadata.info as any).Title.trim()) {
+                title = (metadata.info as any).Title;
             }
-            if (metadata.info.Author && metadata.info.Author.trim()) {
-                author = metadata.info.Author;
+            if ((metadata.info as any).Author && (metadata.info as any).Author.trim()) {
+                author = (metadata.info as any).Author;
             }
         }
     } catch(e) {}
@@ -76,7 +76,7 @@ export const parsePdf = async (file: Blob, bookId: string): Promise<Partial<Book
                 canvas.width = viewport.width;
                 context.fillStyle = '#ffffff';
                 context.fillRect(0, 0, canvas.width, canvas.height);
-                await firstPage.render({ canvasContext: context, viewport }).promise;
+                await firstPage.render({ canvas, canvasContext: context, viewport }).promise;
                 coverUrl = canvas.toDataURL('image/webp', 0.6);
             }
             try { firstPage.cleanup(); } catch (e) {}
@@ -208,7 +208,7 @@ export const parsePdf = async (file: Blob, bookId: string): Promise<Partial<Book
 
     // Cleanup pdf proxy from parsing
     try {
-        await pdf.destroy();
+        await pdf.loadingTask.destroy();
     } catch (e) {}
 
     return {
@@ -244,11 +244,11 @@ export const parsePdfAsText = async (file: Blob, bookId: string): Promise<Partia
             new Promise<null>(res => setTimeout(() => res(null), 1500))
         ]);
         if (metadata && metadata.info) {
-            if (metadata.info.Title && metadata.info.Title.trim()) {
-                title = metadata.info.Title;
+            if ((metadata.info as any).Title && (metadata.info as any).Title.trim()) {
+                title = (metadata.info as any).Title;
             }
-            if (metadata.info.Author && metadata.info.Author.trim()) {
-                author = metadata.info.Author;
+            if ((metadata.info as any).Author && (metadata.info as any).Author.trim()) {
+                author = (metadata.info as any).Author;
             }
         }
     } catch(e) {}
@@ -271,7 +271,7 @@ export const parsePdfAsText = async (file: Blob, bookId: string): Promise<Partia
             canvas.width = viewport.width;
             context.fillStyle = '#ffffff';
             context.fillRect(0, 0, canvas.width, canvas.height);
-            await firstPage.render({ canvasContext: context, viewport }).promise;
+            await firstPage.render({ canvas, canvasContext: context, viewport }).promise;
             coverUrl = canvas.toDataURL('image/webp', 0.6);
         }
         try { firstPage.cleanup(); } catch (e) {}
@@ -509,7 +509,7 @@ export const parsePdfAsText = async (file: Blob, bookId: string): Promise<Partia
     }
 
     try {
-        await pdf.destroy();
+        await pdf.loadingTask.destroy();
     } catch (e) {}
 
     return {

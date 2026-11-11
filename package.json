@@ -12,9 +12,10 @@
     "cap:sync": "npx cap sync",
     "cap:add:android": "npx cap add android",
     "android:build": "npm run build && npx cap sync android",
-    "android:cool": "vite build && npx cap sync android && cd android && ./gradlew assembleCoolRelease",
-    "android:bimbo": "VITE_FLAVOR=bimbo VITE_OPDS_PRESET=flibusta,mangadex vite build && VITE_FLAVOR=bimbo npx cap sync android && cd android && ./gradlew assembleBimboRelease",
+    "android:cool": "tsc -p . && vite build && npx cap sync android && cd android && ./gradlew assembleCoolRelease",
+    "android:bimbo": "tsc -p . && VITE_FLAVOR=bimbo VITE_OPDS_PRESET=flibusta,mangadex vite build && VITE_FLAVOR=bimbo npx cap sync android && cd android && ./gradlew assembleBimboRelease",
     "android:cool-manga": "VITE_OPDS_PRESET=mangadex vite build && npx cap sync android && cd android && ./gradlew assembleCoolRelease",
+    "typecheck": "tsc -p .",
     "test": "vitest run"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "lucide-react": "^0.344.0",
     "motion": "^12.40.0",
     "music-metadata": "^11.15.0",
+    "onnxruntime-web": "1.22.0",
     "pdfjs-dist": "^6.0.227",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

@@ -27,14 +27,16 @@ if (import.meta.env.PROD) {
 
 // The web version (npm run build:web) works offline through a service worker (web-pwa/).
 // The APK and the dev server have none: remove one left behind so it cannot serve stale files.
+// The Telegram version lives in a folder of the web version's site and leaves its worker alone.
 const isWebApp = import.meta.env.VITE_TARGET === 'web' && !Capacitor.isNativePlatform();
 if ('serviceWorker' in navigator) {
   if (isWebApp) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
-  } else {
+  } else if (import.meta.env.VITE_TARGET !== 'telegram') {
     navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => {});
     if ('caches' in window) {
-      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+      // Only the app's own files: the read-aloud voice is kept in another cache (utils/silero/store.ts)
+      caches.keys().then(keys => keys.forEach(k => { if (k.startsWith('coolread-')) caches.delete(k); })).catch(() => {});
     }
   }
 }

@@ -53,6 +53,8 @@ const STORAGE_KEY = 'cool_read_opds_sources';
 // "https://coolread-proxy.name.workers.dev/?url=" (set at build time, see web-pwa/README.md)
 const CORS_PROXY: string = String(import.meta.env.VITE_CORS_PROXY || '');
 const isNative = Capacitor.isNativePlatform();
+/** Catalogs on other sites can be read: always in the Android app, on the web only through the proxy. */
+export const canReadOtherSites = isNative || !!CORS_PROXY;
 
 export const MANGADEX_SOURCE: OpdsSource = { id: 'mangadex', title: 'mangadex', url: 'https://mangadex.org', kind: 'mangadex' };
 // Not a catalog: the built-in browser, whose downloads go to the library

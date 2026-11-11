@@ -2,9 +2,9 @@ import { CatalogBook, CatalogSeries, CATALOG_BOOKS, CATALOG_SERIES, sortBooksChr
 
 const GITHUB_REPO_OWNER = 'lscnsk';
 const GITHUB_REPO_NAME = 'lscnsk_library';
-// v5: books carry sampler links and editions; a list saved before them is fetched again
-const CACHE_KEY = 'lscnsk_library_catalog_manifest_v5';
-const CACHE_TIME_KEY = 'lscnsk_library_last_sync_time_v5';
+// v6: the series were renamed and some books hidden; a list saved before that is fetched again
+const CACHE_KEY = 'lscnsk_library_catalog_manifest_v6';
+const CACHE_TIME_KEY = 'lscnsk_library_last_sync_time_v6';
 
 function formatBytes(bytes: number): string {
   if (!bytes || isNaN(bytes)) return '';

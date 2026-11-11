@@ -3,7 +3,7 @@ import React, { useRef } from 'react';
 interface EmptyStateProps {
   isLoading: boolean;
   booksCount: number;
-  mode: 'ebook' | 'audio';
+  mode: 'ebook' | 'audio' | 'pdf' | 'comic';
   isNative: boolean;
   appStyle: string;
   onExternalFilePicked?: (files: FileList | File[] | File) => void;
