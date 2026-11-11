@@ -960,3 +960,8 @@ button, [role="button"], a {
 @media (prefers-reduced-motion: reduce) {
   [data-reader-container] > *, .fade-in { animation: none; }
 }
+
+/* Changing the app style, light/dark or styled text (see utils/smoothSwitch.ts):
+   a veil fades in and out over the screen while everything changes at once under it */
+.style-veil { position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; opacity: 0; will-change: opacity; }
+.style-switching *, .style-switching *::before, .style-switching *::after { transition: none !important; }

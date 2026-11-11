@@ -1,3 +1,4 @@
+import { activeVariantFor } from '../utils/styleVariants';
 import { useRsvp } from '../hooks/useRsvp';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Book } from '../types';
@@ -1238,6 +1239,7 @@ const EBookReader: React.FC<EBookReaderProps> = ({
   readerFont = 'Literata'
 }) => {
   const readerFontCSS = getFontFamilyCSS(readerFont);
+  const readerInk = activeVariantFor(appStyle)?.reader[theme === 'light' ? 'light' : 'dark'];
 
   // Dots after ! and ? ("!..", "?..") are drawn at the size of the dot in ! and ?,
   // measured from the reading font, so all three dots look alike.
@@ -4119,18 +4121,18 @@ const EBookReader: React.FC<EBookReaderProps> = ({
           .reader-content em.footnote-italic,
           .reader-content span.footnote-italic { 
              font-style: italic !important; 
-             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#db2777' : '#fb7185'} !important;` : ''}
-             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#b45309' : '#93c5fd'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
+             ${readerInk ? `color: ${readerInk.italic} !important;` : appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#db2777' : '#fb7185'} !important;` : ''}
+             ${!readerInk && (appStyle === 'Final' || appStyle === 'Final Fantasy') ? `color: ${theme === 'light' ? '#b45309' : '#93c5fd'} !important;` : ''}
+             ${!readerInk && appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#c2410c' : '#ea580c'} !important;` : ''}
           }
           .reader-content .it-corr {
              margin-right: 0.08em;
           }
           .reader-content strong, .reader-content b { 
              font-weight: bold !important; 
-             ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#f472b6'} !important;` : ''}
-             ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#1e3a8a' : '#fcd34d'} !important;` : ''}
-             ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
+             ${readerInk ? `color: ${readerInk.bold} !important;` : appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#f472b6'} !important;` : ''}
+             ${!readerInk && (appStyle === 'Final' || appStyle === 'Final Fantasy') ? `color: ${theme === 'light' ? '#1e3a8a' : '#fcd34d'} !important;` : ''}
+             ${!readerInk && appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#f59e0b'} !important;` : ''}
           }
 
           /* Reset for standard blocks to prevent styling leaks from previous tags */
@@ -4206,9 +4208,9 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                 font-weight: bold;
                 font-family: ${readerFontCSS} !important;
                 color: inherit;
-                ${appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
-                ${appStyle === 'Final' || appStyle === 'Final Fantasy' ? `color: ${theme === 'light' ? '#2563eb' : '#60a5fa'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 8px rgba(96,165,250,0.4)'} !important;` : ''}
-                ${appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
+                ${readerInk ? `color: ${readerInk.cap} !important; text-shadow: ${readerInk.capGlow && theme !== 'light' ? `0 0 6px ${readerInk.capGlow}` : 'none'} !important;` : appStyle === 'Bimbo' ? `color: ${theme === 'light' ? '#BE123C' : '#fb7185'} !important;` : ''}
+                ${!readerInk && (appStyle === 'Final' || appStyle === 'Final Fantasy') ? `color: ${theme === 'light' ? '#2563eb' : '#60a5fa'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 8px rgba(96,165,250,0.4)'} !important;` : ''}
+                ${!readerInk && appStyle === 'Dragon' ? `color: ${theme === 'light' ? '#991b1b' : '#ef4444'} !important; text-shadow: ${theme === 'light' ? 'none' : '0 0 6px rgba(239, 68, 68, 0.5)'} !important;` : ''}
             }
           ` : ''}
 
@@ -4737,9 +4739,11 @@ const EBookReader: React.FC<EBookReaderProps> = ({
             cursor: pointer;
             opacity: 0.75;
           }
+          @media (hover: hover) and (pointer: fine) {
           .reader-content a:hover {
             opacity: 1;
             text-decoration-thickness: 2px;
+          }
           }
           
           /* Search highlight without shifting text layout */
@@ -4829,9 +4833,11 @@ const EBookReader: React.FC<EBookReaderProps> = ({
              cursor: pointer;
           }
 
+          @media (hover: hover) and (pointer: fine) {
           .reader-content .note-back-link:hover {
              background: rgba(128,128,128,0.35);
              transform: scale(1.08);
+          }
           }
 
           .reader-content .note-divider {
@@ -4962,8 +4968,8 @@ const EBookReader: React.FC<EBookReaderProps> = ({
                                     }}
                                     className={`flex items-center gap-2 px-6 py-2 rounded-full border transition-all group shadow-md opacity-80 hover:opacity-100 ${nextBtnClasses}`}
                                  >
-                                    <span className={appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : (appStyle === 'Dragon' ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
-                                        {appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Dragon' ? 'Roll for Initiative 🎲' : appStyle === 'Marcel' ? 'Turn page 🍵' : 'Continue')))}
+                                    <span className={activeVariantFor(appStyle) ? `${({ Byte: 'text-lg', Mint: 'text-lg' } as Record<string, string>)[activeVariantFor(appStyle)!.name] || 'text-sm'} ${activeVariantFor(appStyle)!.fontClass} tracking-wider` : appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'text-xs font-ff tracking-[0.2em] font-medium' : (appStyle === 'Bimbo' ? 'text-base font-bimbo tracking-widest' : (appStyle === 'Surf' ? 'text-xl font-surf tracking-wider leading-none' : (appStyle === 'Dragon' ? 'text-sm font-dragon tracking-widest' : 'text-[10px] font-literata uppercase tracking-widest font-medium')))}>
+                                        {activeVariantFor(appStyle) ? activeVariantFor(appStyle)!.nextChapter : appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'Journey Onward ☄️' : (appStyle === 'Bimbo' ? 'Thank you, next... 💅' : (appStyle === 'Surf' ? 'Catch the next wave 🏄' : (appStyle === 'Dragon' ? 'Roll for Initiative 🎲' : appStyle === 'Marcel' ? 'Turn page 🍵' : 'Continue')))}
                                     </span>
                                     <ChevronRight size={14} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                                  </button>

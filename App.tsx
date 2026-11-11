@@ -1,6 +1,6 @@
 import { useAppPersistence } from "./hooks/useAppPersistence";
 import { useLibrary } from "./hooks/useLibrary";
-import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { motion } from 'motion/react';
 import LibrarySidebar from './components/LibrarySidebar';
 import ChapterSidebar from './components/ChapterSidebar';
@@ -54,6 +54,8 @@ import { getStoredCatalogBooks, syncCatalogFromGitHub, lastCatalogSyncTime, down
 import { parseM4AChapters } from './utils/mp4chapters';
 import { findLibraryBook, hasNewEdition, rememberEdition, setEditionRemap } from './utils/catalogEditions';
 import { saveBookToDB, deleteBookContent, stripChapterContent } from './utils/db';
+import { smoothSwitch, instantSwitch } from './utils/smoothSwitch';
+import { applyStyleVariant, baseStyleOf, noteChosenStyle, variantOf } from './utils/styleVariants';
 
 
 function App() {
@@ -152,7 +154,7 @@ function App() {
     setIsStyledMode, 
     isBionic, 
     setIsBionic, 
-    appStyle, 
+    appStyle: styleName, 
     setAppStyle, 
     isSettingsLoadedRef, 
     isRsvpMode, 
@@ -167,6 +169,9 @@ function App() {
     addCustomFont,
     deleteCustomFont
   } = useSettings();
+  // Added styles (Code, Byte, Mint, Jazz) reuse the screens of an existing style
+  const appStyle = baseStyleOf(styleName);
+  noteChosenStyle(styleName);
   const [readerProgress, setReaderProgress] = useState(0); 
   const [highlightText, setHighlightText] = useState<string>("");
   const [highlightMatchIndex, setHighlightMatchIndex] = useState<number>(-1);
@@ -319,7 +324,7 @@ function App() {
   const canGoBack = isSidebarOpen || isChapterListOpen || !!lightboxImage || !!currentBook || isAudioModalOpen
     || navStack.length > 0 || isRsvpMode || isCatalogFilterOpen || isCatalogOpen;
   useEffect(() => { setTelegramBack(canGoBack, () => { handleHardwareBack(); }); }, [canGoBack, handleHardwareBack]);
-  useEffect(() => { setTelegramColors(barColors(appStyle).background); }, [appStyle]);
+  useEffect(() => { setTelegramColors(barColors(styleName).background); }, [styleName]);
 
   const toggleLibrary = () => {
     setIsSidebarOpen(prev => !prev);
@@ -355,13 +360,15 @@ function App() {
   };
 
   const handleAppStyleChange = (style: string) => {
-    setAppStyle(style);
-    setTitleClickKey(k => k + 1);
-    if (style === 'Bimbo' || style === 'Surf' || style === 'Marcel') {
-      setTheme('light');
-    } else {
-      setTheme('dark');
-    }
+    smoothSwitch(() => {
+      setAppStyle(style);
+      setTitleClickKey(k => k + 1);
+      if (style === 'Bimbo' || style === 'Surf' || style === 'Marcel' || variantOf(style)?.theme === 'light') {
+        setTheme('light');
+      } else {
+        setTheme('dark');
+      }
+    }, barColors(style).background);
   };
 
 
@@ -927,7 +934,7 @@ function App() {
         title: book.chapters[currentChapterIndex]?.name?.replace(/\.[^/.]+$/, '') || book.title,
         subtitle: book.title,
         cover,
-        color: accentOf(appStyle),
+        color: accentOf(styleName),
         playing: isPlaying,
         loading: isPlaying && isAudioLoading,
         position: currentTime,
@@ -937,7 +944,10 @@ function App() {
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentBook?.id, currentChapterIndex, isPlaying, isAudioLoading, duration, playbackRate, appStyle, positionBucket]);
+  }, [mode, currentBook?.id, currentChapterIndex, isPlaying, isAudioLoading, duration, playbackRate, styleName, positionBucket]);
+
+  // Colours of the added styles (Code, Byte, Mint, Jazz) on top of their base style's CSS
+  useLayoutEffect(() => { applyStyleVariant(variantOf(styleName)); }, [styleName, theme, isStyledMode]);
 
   const isBimbo = appStyle === 'Bimbo';
   const isSurf = appStyle === 'Surf';
@@ -989,6 +999,7 @@ function App() {
         onClose={() => setIsSidebarOpen(false)}
         bookProgressMap={bookProgressMap}
         appStyle={appStyle}
+        styleName={styleName}
         onAppStyleChange={handleAppStyleChange}
         currentBookFormat={currentBook?.format || null}
         // Close the library so the newly added book is visible once it opens
@@ -1020,7 +1031,7 @@ function App() {
         onOpenOpds={(src) => { setActiveOpds(src); setIsCatalogOpen(true); }}
         onAddOpds={(src) => {
           updateOpdsSources([...opdsSources, src]);
-          if (src.kind === 'site') openSite(src.url, appStyle);
+          if (src.kind === 'site') openSite(src.url, styleName);
           else { setActiveOpds(src); setIsCatalogOpen(true); }
         }}
         onDeleteOpds={(id) => { updateOpdsSources(opdsSources.filter(s => s.id !== id)); if (activeOpds?.id === id) setActiveOpds(null); }}
@@ -1079,6 +1090,7 @@ function App() {
             isImmersive={isImmersive}
             mode={mode}
             appStyle={appStyle}
+            styleName={styleName}
             libraryClickKey={libraryClickKey}
             titleClickKey={titleClickKey}
             chaptersClickKey={chaptersClickKey}
@@ -1173,6 +1185,7 @@ function App() {
                 mode={mode} 
                 isNative={isNative} 
                 appStyle={appStyle} 
+                styleName={styleName}
                 onExternalFilePicked={handleExternalFilePicked}
                 onExternalFolderPicked={handleExternalFolderPicked}
                 currentBook={currentBook}
@@ -1195,7 +1208,7 @@ function App() {
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center">
                                         <span className="text-[5rem] md:text-[7rem] leading-none select-none opacity-80 emoji" style={{ fontSize: '5rem' }}>
-                                            {isMarcel ? '☕' : isBimbo ? '💿' : isSurf ? '🏄' : '💽'}
+                                            {variantOf(styleName)?.audioEmoji ?? (isMarcel ? '☕' : isBimbo ? '💿' : isSurf ? '🏄' : '💽')}
                                         </span>
                                     </div>
                                 )}
@@ -1519,10 +1532,10 @@ function App() {
                                 onOpenSearch={toggleSearch}
                                 chapters={currentBook.chapters}
                                 theme={theme}
-                                onToggleTheme={() => setTheme(p => p === 'dark' ? 'light' : 'dark')}
+                                onToggleTheme={() => instantSwitch(() => setTheme(p => p === 'dark' ? 'light' : 'dark'))}
                                 show={!isImmersive}
                                 isStyledMode={isStyledMode}
-                                onToggleStyledMode={() => setIsStyledMode(!isStyledMode)}
+                                onToggleStyledMode={() => instantSwitch(() => setIsStyledMode(!isStyledMode))}
                                 isPdfSource={isCurrentBookOriginallyPdf}
                                 currentBookFormat={currentBook?.format || null}
                                 onTogglePdfFormat={handleTogglePdfFormat}

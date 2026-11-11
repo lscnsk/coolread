@@ -1,3 +1,4 @@
+import { activeVariantFor } from '../utils/styleVariants';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chapter, Bookmark } from '../types';
 import { ChevronDown, ChevronRight, Minus } from 'lucide-react';
@@ -679,9 +680,9 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
         ) : (
              <h2 className="text-xl font-bold flex items-center gap-1.5 text-[#fffff0] truncate min-w-0 flex-1">
                 <span className="text-3xl leading-none shrink-0 emoji">
-                    {isBookmarksMode ? '🔖' : (appStyle === 'Marcel' ? '🪻' : appStyle === 'Dragon' ? '🏰' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? '📜' : (appStyle === 'Bimbo' ? '💎' : (appStyle === 'Surf' ? '🐚' : '📖'))))}
+                    {isBookmarksMode ? '🔖' : activeVariantFor(appStyle) ? activeVariantFor(appStyle)!.chaptersEmoji : (appStyle === 'Marcel' ? '🪻' : appStyle === 'Dragon' ? '🏰' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? '📜' : (appStyle === 'Bimbo' ? '💎' : (appStyle === 'Surf' ? '🐚' : '📖'))))}
                 </span>
-                <span className={`leading-normal whitespace-nowrap ${appStyle === 'Marcel' ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : appStyle === 'Bimbo' ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (appStyle === 'Surf' ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (appStyle === 'Dragon' ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>
+                <span className={`leading-normal whitespace-nowrap ${activeVariantFor(appStyle) ? activeVariantFor(appStyle)!.panelTitleClass : appStyle === 'Marcel' ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : appStyle === 'Bimbo' ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (appStyle === 'Surf' ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (appStyle === 'Final' || appStyle === 'Final Fantasy' ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (appStyle === 'Dragon' ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>
                     {isBookmarksMode ? 'Bookmarks' : 'Chapters'}
                 </span>
              </h2>

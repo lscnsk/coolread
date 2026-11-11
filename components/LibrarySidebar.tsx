@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { variantOf, VARIANT_NAMES, STYLE_VARIANTS } from '../utils/styleVariants';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Book, PersistedState } from '../types';
 import { ChevronDown } from 'lucide-react';
@@ -15,6 +16,8 @@ interface LibrarySidebarProps {
   onClose: () => void;
   bookProgressMap?: Record<string, PersistedState>; 
   appStyle: string;
+  /** The chosen style, when it is one of the added styles built on appStyle */
+  styleName?: string;
   onAppStyleChange: (style: string) => void;
   currentBookFormat?: string | null;
   onExternalFilePicked?: (files: FileList | File[] | File) => void;
@@ -30,6 +33,21 @@ interface LibrarySidebarProps {
   catalogNames?: string;
 }
 
+// Style buttons in Settings: on mouse hover each one lights up in its own style.
+// Colours are one step off the base styles' own so the added styles' recolouring leaves them alone.
+const STYLE_BTN_HOVER: Record<string, string> = {
+  Cool: 'hover:bg-[#363331] hover:border-[#57534f] hover:text-[#fffff1]',
+  Bimbo: 'hover:bg-[#FFF0F5] hover:border-[#F472B6] hover:text-[#BE123C]',
+  Final: 'hover:bg-[#0b1d3b] hover:border-[#dfc895] hover:text-[#f0debb]',
+  Dragon: 'hover:bg-[#271c1a] hover:border-[#991b1c] hover:text-[#fcd34e]',
+  Surf: 'hover:bg-[#f0f9fe] hover:border-[#38bdf9] hover:text-[#0ea5ea]',
+  Marcel: 'hover:bg-[#F3EFFB] hover:border-[#AC97D7] hover:text-[#2F2440]',
+  Code: 'hover:bg-[#060b07] hover:border-[#16a34a] hover:text-[#86efac]',
+  Byte: 'hover:bg-[#170a2b] hover:border-[#ff4fd8] hover:text-[#5eead4]',
+  Mint: 'hover:bg-[#F2F6EC] hover:border-[#8DB66A] hover:text-[#5B8538]',
+  Jazz: 'hover:bg-[#0b0b0a] hover:border-[#a8894c] hover:text-[#f1dfae]',
+};
+
 const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ 
   books, 
   currentBookId, 
@@ -38,6 +56,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   onClose,
   bookProgressMap = {},
   appStyle,
+  styleName,
   onAppStyleChange,
   currentBookFormat = null,
   onExternalFilePicked,
@@ -183,10 +202,12 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   const [fullVersionOpen, setFullVersionOpen] = useState(false);
   useEffect(() => watchHomeScreen(setHomeScreen), []);
   const isMarcel = appStyle === 'Marcel';
+  const v = variantOf(styleName);
+  const chosen = styleName ?? appStyle;
   // Unselected style buttons in Settings: a quiet border in the current style's colors
-  const styleBtnIdle = `${
+  const styleBtnIdle = (name: string) => `${
     isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isMarcel ? 'border-[#DBD0EF]' : isDragon ? 'border-[#4a2511]' : isFF ? 'border-[#17335e]' : 'border-[#363330]'
-  } text-[#999] hover:bg-[#363330] hover:text-[#ddd]`;
+  } text-[#999] ${STYLE_BTN_HOVER[name] || ''}`;
 
   // Reading progress line under each book, in the accent colour of the style
   const progressBarColor = isMarcel ? 'rgba(84,67,114,0.6)'
@@ -251,13 +272,13 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                   className="w-full h-full object-cover"
                   fallbackComponent={
                     <span className="text-lg opacity-50 text-[#666] emoji">
-                      {book.type === 'audio' ? (isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖'))))}
+                      {book.type === 'audio' ? (v ? v.audioEmoji : isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (v ? v.ebookEmoji : isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖'))))}
                     </span>
                   }
                 />
             ) : (
                 <span className="text-lg opacity-50 text-[#666] emoji">
-                  {book.type === 'audio' ? (isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖'))))}
+                  {book.type === 'audio' ? (v ? v.audioEmoji : isDragon ? '📯' : (isFF ? '🎼' : (isBimbo ? '💿' : (isSurf ? '🏄' : '💿')))) : (v ? v.ebookEmoji : isDragon ? '📜' : (isFF ? '📜' : (isBimbo ? '🩰' : (isSurf ? '🌊' : '📖'))))}
                 </span>
             )}
         </div>
@@ -368,13 +389,13 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           <h2 className="text-xl font-bold flex items-center gap-1.5 text-[#fffff0] min-w-0 flex-1 overflow-hidden">
             {view === 'library' ? (
               <>
-                <span className="text-3xl leading-none flex-shrink-0 emoji">{isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
-                <span className={`leading-normal whitespace-nowrap ${isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Library</span>
+                <span className="text-3xl leading-none flex-shrink-0 emoji">{v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
+                <span className={`leading-normal whitespace-nowrap ${v ? v.panelTitleClass : isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Library</span>
               </>
             ) : (
               <>
                 <span className="text-3xl leading-none flex-shrink-0 emoji">⚙️</span>
-                <span className={`leading-normal whitespace-nowrap ${isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Settings</span>
+                <span className={`leading-normal whitespace-nowrap ${v ? v.panelTitleClass : isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Settings</span>
               </>
             )}
           </h2>
@@ -426,10 +447,10 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <button 
                     onClick={() => onAppStyleChange('Cool')}
-                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      appStyle === 'Cool' 
+                    className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      chosen === 'Cool' 
                         ? 'bg-[#363330] border-[#57534e] text-[#fffff0] shadow-sm' 
-                        : styleBtnIdle
+                        : styleBtnIdle('Cool')
                     }`}
                   >
                     <span className="text-base font-semibold">Cool</span>
@@ -437,10 +458,10 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                   </button>
                   <button 
                     onClick={() => onAppStyleChange('Bimbo')}
-                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      appStyle === 'Bimbo' 
+                    className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      chosen === 'Bimbo' 
                         ? 'bg-[#FFF0F5] border-[#F472B6] text-[#BE123C] shadow-sm' 
-                        : styleBtnIdle
+                        : styleBtnIdle('Bimbo')
                     }`}
                   >
                     <span className="font-bimbo text-xl leading-none">Bimbo</span>
@@ -448,48 +469,62 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                   </button>
                   <button 
                     onClick={() => onAppStyleChange('Final')}
-                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      isFF 
+                    className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      (chosen === 'Final' || chosen === 'Final Fantasy') 
                         ? 'bg-[#363330] border-[#57534e] text-[#fffff0] shadow-sm' 
-                        : styleBtnIdle
+                        : styleBtnIdle('Final')
                     }`}
                   >
-                    <span className="font-ff text-base tracking-widest leading-none">Final</span>
+                    <span className="style-label font-ff text-base tracking-widest leading-none">Final</span>
                     <span className="text-xl emoji leading-none shrink-0">☄️</span>
                   </button>
                   <button 
                     onClick={() => onAppStyleChange('Dragon')}
-                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      isDragon 
+                    className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      chosen === 'Dragon' 
                         ? 'bg-[#363330] border-[#57534e] text-[#fffff0] shadow-sm' 
-                        : styleBtnIdle
+                        : styleBtnIdle('Dragon')
                     }`}
                   >
-                    <span className="font-dragon text-base tracking-wider leading-none">Roll</span>
+                    <span className="style-label font-dragon text-base tracking-wider leading-none">Roll</span>
                     <span className="text-xl emoji leading-none shrink-0">🐉</span>
                   </button>
                   <button 
                     onClick={() => onAppStyleChange('Surf')}
-                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      isSurf 
+                    className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      chosen === 'Surf' 
                         ? 'bg-[#F0F9FF] border-[#38bdf8] text-[#0ea5e9] shadow-sm' 
-                        : styleBtnIdle
+                        : styleBtnIdle('Surf')
                     }`}
                   >
-                    <span className="font-surf text-2xl leading-none pt-0.5">Surf</span>
+                    <span className="style-label font-surf text-2xl leading-none pt-0.5">Surf</span>
                     <span className="text-xl emoji leading-none shrink-0">🏄</span>
                   </button>
                   <button 
                     onClick={() => onAppStyleChange('Marcel')}
-                    className={`p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
-                      appStyle === 'Marcel' 
+                    className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${
+                      chosen === 'Marcel' 
                         ? 'bg-[#F3EFFB] border-[#AC97D7] text-[#2F2440] shadow-sm' 
-                        : styleBtnIdle
+                        : styleBtnIdle('Marcel')
                     }`}
                   >
                     <span className="font-marcel text-base font-medium leading-none">Marcel</span>
                     <span className="text-xl emoji leading-none shrink-0">🪻</span>
                   </button>
+                  {VARIANT_NAMES.map(name => {
+                    const sv = STYLE_VARIANTS[name];
+                    const selected = sv.base === 'Surf' ? 'bg-[#F0F9FF] border-[#38bdf8] text-[#0ea5e9] shadow-sm' : 'bg-[#363330] border-[#57534e] text-[#fffff0] shadow-sm';
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => onAppStyleChange(name)}
+                        className={`style-btn p-3 rounded border flex items-center justify-between min-h-[52px] transition-all ${chosen === name ? selected : styleBtnIdle(name)}`}
+                      >
+                        <span className={`style-label ${sv.fontClass} ${name === 'Byte' ? 'text-2xl' : name === 'Mint' ? 'text-xl' : 'text-base'} leading-none`}>{name}</span>
+                        <span className="text-xl emoji leading-none shrink-0">{sv.titleEmoji}</span>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Font Selection Button & Dropdown (Hidden in audio mode) */}
@@ -667,11 +702,10 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                          ? 'bg-[#406da3]/60 text-[#dfc894]'
                          : 'bg-[#45413e]/70 text-[#fffff0]'
                      }`}>
-                       <span className="text-xl group-hover:scale-110 transition-transform emoji">🎧</span>
+                       <span className="text-xl group-hover:scale-110 transition-transform emoji">📲</span>
                      </div>
                      <div className="flex flex-col min-w-0 flex-1 justify-center">
                         <span className="text-xs font-bold uppercase tracking-wider">Full version</span>
-                        <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">read aloud, az.lib.ru, built-in browser</span>
                      </div>
                    </button>
                  {fullVersionOpen && (

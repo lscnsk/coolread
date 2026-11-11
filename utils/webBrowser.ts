@@ -1,3 +1,4 @@
+import { activeVariantFor } from './styleVariants';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { openTelegramLink } from './telegram';
 
@@ -12,6 +13,8 @@ const WebBrowser = registerPlugin<WebBrowserPlugin>('WebBrowser');
 
 // Colors of the browser's top bar, matching the app header of each style
 export const barColors = (appStyle: string) => {
+  const v = activeVariantFor(appStyle);
+  if (v) return v.bar;
   switch (appStyle) {
     case 'Bimbo': return { background: '#FFF0F5', foreground: '#881337' };
     case 'Surf': return { background: '#F0F9FF', foreground: '#0C4A6E' };

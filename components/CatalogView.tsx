@@ -363,18 +363,18 @@ export const CatalogView: React.FC<CatalogViewProps> = React.memo(({
             return (
               <article
                 key={entry.id}
-                className={`rounded-xl p-5 md:p-6 transition-all grid grid-cols-1 sm:grid-cols-[200px_1fr] md:grid-cols-[230px_1fr] gap-6 md:gap-8 items-start ${
+                className={`rounded-xl p-5 md:p-6 grid grid-cols-1 sm:grid-cols-[200px_1fr] md:grid-cols-[230px_1fr] gap-6 md:gap-8 items-start ${
                   isMarcel
-                    ? 'bg-white/85 border border-[#C4B5E6] shadow-sm hover:border-[#AC97D7]'
+                    ? 'bg-white/85 border border-[#C4B5E6] shadow-sm'
                     : isBimbo
-                    ? 'bg-white/85 border border-[#FBCFE8] shadow-sm hover:border-[#F472B6]'
+                    ? 'bg-white/85 border border-[#FBCFE8] shadow-sm'
                     : isSurf
-                    ? 'bg-white/85 border border-[#BAE6FD] shadow-sm hover:border-[#38BDF8]'
+                    ? 'bg-white/85 border border-[#BAE6FD] shadow-sm'
                     : isDragon
-                    ? 'bg-[#1a0f0d]/90 border border-[#7f1d1d]/80 shadow-md hover:border-[#991b1b]'
+                    ? 'bg-[#1a0f0d]/90 border border-[#7f1d1d]/80 shadow-md'
                     : isFF
-                    ? 'bg-[#061124]/90 border border-[#406da3]/70 shadow-md hover:border-[#dfc894]/60'
-                    : 'bg-[#2a2724]/70 border border-[#45413e]/60 shadow-md hover:border-[#5c5752]'
+                    ? 'bg-[#061124]/90 border border-[#406da3]/70 shadow-md'
+                    : 'bg-[#2a2724]/70 border border-[#45413e]/60 shadow-md'
                 }`}
               >
                 {/* COLUMN 1: COVER & DOWNLOAD/READ BUTTON */}

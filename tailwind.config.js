@@ -1,4 +1,7 @@
 export default {
+  // Hover looks only on devices with a real mouse: on a touch screen a tapped button
+  // otherwise stays lit until you tap somewhere else.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "./index.html",
     "./components/**/*.{js,ts,jsx,tsx}",
@@ -17,6 +20,10 @@ export default {
         dragon: ['"Uncial Antiqua"', 'cursive'],
         surf: ['"Caveat"', 'cursive'],
         marcel: ['"Parisienne"', 'cursive'],
+        code: ['"Share Tech Mono"', 'ui-monospace', 'monospace'],
+        byte: ['"VT323"', 'ui-monospace', 'monospace'],
+        mint: ['"Satisfy"', 'cursive'],
+        jazz: ['"Poiret One"', 'serif'],
       }
     },
   },
