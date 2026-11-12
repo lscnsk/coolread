@@ -224,6 +224,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
     const hasStarted = progressPercent > 0;
     const isSelected = currentBookId === book.id;
     const isAudio = book.type === 'audio';
+    // On another device's shelf, its file not added here yet (Telegram cloud sync)
+    const isMissing = !!book.missing;
     const isPdf = book.type === 'ebook' && (
       book.format === 'pdf' || 
       book.id.toLowerCase().endsWith('.pdf') || 
@@ -247,7 +249,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           onSelectBook(book);
           onClose();
         }}
-        className={`group relative w-full h-[64px] shrink-0 text-left px-2.5 py-1 rounded transition-all flex items-center gap-3 border overflow-hidden cursor-pointer mb-2 ${
+        title={isMissing ? 'Upload the book' : undefined}
+        className={`group relative w-full h-[64px] shrink-0 text-left px-2.5 py-1 rounded transition-all flex items-center gap-3 border overflow-hidden cursor-pointer mb-2 ${isMissing ? 'opacity-50 grayscale' : ''} ${
           isSelected 
             ? (isMarcel ? 'bg-[#F3EFFB] text-[#2F2440] border-[#C4B5E6] shadow-md' : isBimbo ? 'bg-white text-[#BE123C] border-[#FBCFE8] shadow-md' : isSurf ? 'bg-white text-[#0369a1] border-[#7dd3fc] shadow-md' : 'bg-[#363330] text-[#fffff0] border-[#57534e] shadow-md')
             : (isMarcel ? 'text-[#544372] hover:bg-[#E8E0F5] hover:text-[#111111] border-transparent' : isBimbo ? 'text-[#BE123C]/70 hover:bg-white/50 hover:text-[#BE123C] border-transparent' : isSurf ? 'text-[#0284c7] hover:bg-sky-50/50 hover:text-[#0c4a6e] border-transparent' : 'text-[#999] hover:bg-[#363330] hover:text-[#ddd] border-transparent')
@@ -298,6 +301,11 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           
           <div className="flex items-center justify-between gap-1.5 min-w-0 leading-none">
             <div className="flex items-center gap-1.5 min-w-0">
+              {isMissing && (
+                <span className={`text-[9.5px] px-1 py-0.5 rounded font-sans shrink-0 border border-dashed ${isSurf ? 'border-[#7dd3fc] text-[#0284c7]' : 'border-[#57534e] text-[#999]'}`}>
+                  Upload the book
+                </span>
+              )}
               {hasStarted && (
                 <span className={`text-[9.5px] px-1 py-0.5 rounded font-sans shrink-0 ${isSurf ? 'bg-sky-100 text-[#0284c7]' : 'bg-[#45413e] text-[#999]'}`}>
                   {Math.round(progressPercent)}%

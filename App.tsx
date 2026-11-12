@@ -55,6 +55,7 @@ import { parseM4AChapters } from './utils/mp4chapters';
 import { findLibraryBook, hasNewEdition, rememberEdition, setEditionRemap } from './utils/catalogEditions';
 import { saveBookToDB, deleteBookContent, stripChapterContent } from './utils/db';
 import { smoothSwitch, instantSwitch } from './utils/smoothSwitch';
+import { isCloudSyncOn, syncToCloud, missingBooks, onCloudChange, forgetMissingBook, preferMissingBook } from './utils/cloudSync';
 import { applyStyleVariant, baseStyleOf, noteChosenStyle, variantOf } from './utils/styleVariants';
 
 
@@ -475,6 +476,32 @@ function App() {
       (text, sticky) => setIncomingNotice(text ? { text, sticky: !!sticky } : null)
     );
   }, [isLibraryReady]);
+
+  // Telegram: the shelf, progress and settings go to the cloud; books from other devices
+  // that this one does not have are shown grey ("missing")
+  const [missingShelf, setMissingShelf] = useState<Book[]>([]);
+  const [cloudTick, setCloudTick] = useState(0);
+  useEffect(() => onCloudChange(() => setCloudTick(t => t + 1)), []);
+  useEffect(() => {
+    if (!isLibraryReady || !isCloudSyncOn()) return;
+    syncToCloud(books, deletedBookIds);
+    setMissingShelf(missingBooks());
+  }, [isLibraryReady, books, deletedBookIds, bookProgressMap, bookMetadataMap, cloudTick,
+      fontSize, theme, isStyledMode, isBionic, styleName, rsvpWpm, isPagedMode, readerFont]);
+  // Grey books may be catalog books: have the catalog at hand, so a tap downloads them at once
+  useEffect(() => {
+    if (missingShelf.length > 0) {
+      syncCatalogFromGitHub().then(({ books }) => setCatalogBooks(books)).catch(() => {});
+    }
+  }, [missingShelf.length > 0]);
+  const missingFileInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const input = missingFileInputRef.current;
+    if (!input) return;
+    const cancel = () => preferMissingBook(null);
+    input.addEventListener('cancel', cancel);
+    return () => input.removeEventListener('cancel', cancel);
+  }, []);
   const [incomingNotice, setIncomingNotice] = useState<{ text: string; sticky: boolean } | null>(null);
   useEffect(() => {
     if (!incomingNotice || incomingNotice.sticky) return;
@@ -855,6 +882,25 @@ function App() {
   // --- Render ---
   const activeBooks = books.filter(b => !deletedBookIds.includes(b.id));
 
+  // A grey book: a catalog book downloads again, any other asks for its file
+  const openMissingBook = (book: Book) => {
+    const t = (book.title || '').trim().toLowerCase();
+    const cat = [...catalogBooks, ...getStoredCatalogBooks()].find(c => (c.title || '').trim().toLowerCase() === t
+      && (!book.author || !c.author || c.author.trim().toLowerCase() === book.author.trim().toLowerCase()));
+    preferMissingBook(book.id);
+    if (cat) {
+      setIsSidebarOpen(false);
+      handleDownloadCatalogBook(cat);
+      return;
+    }
+    const input = missingFileInputRef.current;
+    if (!input) return;
+    input.accept = book.type === 'audio' ? 'audio/*,.mp3,.m4a,.m4b,.mp4' : '.fb2,.epub,.pdf,.cbz,.cbr,.zip,.fb2.zip';
+    input.multiple = book.type === 'audio';
+    input.value = '';
+    input.click();
+  };
+
   // Seek within the chapter; a time before 0 or past its end goes on into the neighbouring chapters
   const seekInBook = (t: number) => {
     if (!currentBook) return;
@@ -987,11 +1033,24 @@ function App() {
           />
       )}
 
+      <input
+        ref={missingFileInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files ? Array.from(e.target.files) : [];
+          if (files.length === 0) { preferMissingBook(null); return; }
+          setIsSidebarOpen(false);
+          setIsCatalogOpen(false);
+          handleExternalFilePicked(files);
+        }}
+      />
       <LibrarySidebar 
         catalogNames={catalogNames}
-        books={activeBooks}
+        books={missingShelf.length ? [...activeBooks, ...missingShelf] : activeBooks}
         currentBookId={currentBook?.id || null}
         onSelectBook={(book, forceFormatAsFb2) => {
+          if (book.missing) { openMissingBook(book); return; }
           setIsCatalogOpen(false);
           handleSelectBook(book, forceFormatAsFb2);
         }}
@@ -1005,7 +1064,10 @@ function App() {
         // Close the library so the newly added book is visible once it opens
         onExternalFilePicked={(files) => { setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFilePicked(files); }}
         onExternalFolderPicked={(files) => { setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFolderPicked(files); }}
-        onDeleteBook={handleDeleteBook}
+        onDeleteBook={(id) => {
+          if (missingShelf.some(b => b.id === id)) { forgetMissingBook(id); deleteBookHistory(id); return; }
+          return handleDeleteBook(id);
+        }}
         mode={mode}
         readerFont={readerFont}
         onReaderFontChange={setReaderFont}

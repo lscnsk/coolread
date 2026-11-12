@@ -31,6 +31,8 @@ export interface Book {
   format?: 'epub' | 'fb2' | 'pdf' | 'comic';
   size?: number;
   pageCount?: number;
+  /** On the shelf of another device (Telegram cloud sync), its file not added here yet */
+  missing?: boolean;
 }
 
 export interface PlayerState {
