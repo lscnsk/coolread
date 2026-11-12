@@ -19,6 +19,7 @@ import '@fontsource/poiret-one/400.css';
 import { Capacitor } from '@capacitor/core';
 import App from './App';
 import { initTelegram, isLite } from './utils/telegram';
+import { pullFromCloud } from './utils/cloudSync';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
@@ -54,11 +55,13 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+// In Telegram the newest shelf, progress and settings come from the cloud first
+(isLite ? pullFromCloud() : Promise.resolve()).finally(() => {
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+});

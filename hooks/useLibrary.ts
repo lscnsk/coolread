@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { SplashScreen } from '@capacitor/splash-screen';
+import { claimMissingBook } from '../utils/cloudSync';
 import { Book, Chapter, AppMode, PersistedState } from '../types';
 import { getAllPersistentBooks, saveBookToDB, deleteBookFromDB, purgeDeletedBooksFromDB, unmarkBookAsDeleted, getAllCovers, saveCoverToDB } from '../utils/db';
 import { getAudioDuration } from '../utils/audio';
@@ -676,6 +677,14 @@ export function useLibrary({
         }))
       };
 
+      // The grey book from another device this is, if any: it takes over its id, so its progress
+      const missingId = claimMissingBook(finalBook);
+      if (missingId) {
+        const oldId = finalBook.id;
+        finalBook.id = missingId;
+        finalBook.chapters = finalBook.chapters.map(ch => ({ ...ch, path: ch.path === oldId ? missingId : ch.path }));
+      }
+
       await unmarkAsDeleted(finalBook.id, finalTitle, finalBook.chapters.map(c => c.path || c.name));
       setBooks(prev => [finalBook, ...prev]);
       await saveBookToDB(finalBook);
@@ -873,9 +882,12 @@ export function useLibrary({
 
     // 4. Audio Book Folder (Progressive loading & instant playback of first loaded chapters)
     const { files: folderFiles, allFiles: fileArray, extractedCover, coverFile } = current;
-    const newBookId = "external_folder_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const finalTitle = title || current.folderName;
     const finalAuthor = author || current.author || '';
+    // The grey book from another device this is, if any (keeps its id, so its progress)
+    const newBookId = claimMissingBook({ title: finalTitle, author: finalAuthor, type: 'audio',
+        size: folderFiles.reduce((acc, f) => acc + (f.size || 0), 0) })
+      || "external_folder_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
 
     const imageFile = coverFile || fileArray.find(f => {
       const isImage = f.name.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|bmp)$/);
