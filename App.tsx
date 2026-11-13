@@ -1299,11 +1299,12 @@ function App() {
           ) : (
             mode === 'audio' && deckKind ? (
                 // Player mode: the cassette deck or the record, with the rest of the collection under it
-                <div className={`flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden ${deckKind === 'tape' ? 'px-2' : 'px-4'} pt-[124px] pb-6 flex flex-col`}
+                <div className={`flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden ${deckKind === 'tape' ? 'px-2 pt-20 pb-0' : 'px-4 pt-[124px] pb-6'} flex flex-col`}
                      style={coverTint ? { background: tintBackground(coverTint), transition: 'background .6s' } : undefined}>
                     <AudioDeck
                         book={currentBook}
                         others={activeBooks.filter(b => b.id !== currentBook.id && !b.missing && b.type === 'audio' && deckKindOf(b.id) === deckKind)}
+                        collection={activeBooks.filter(b => (b.id === currentBook.id || !b.missing) && b.type === 'audio' && deckKindOf(b.id) === deckKind)}
                         kind={deckKind}
                         deckKey={deckKeyOf(appStyle, styleName)}
                         isPlaying={isPlaying}

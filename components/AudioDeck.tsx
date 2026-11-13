@@ -11,6 +11,8 @@ interface AudioDeckProps {
   book: Book;
   /** The rest of the collection, shown in the strip under the player */
   others: Book[];
+  /** The whole collection of this kind, the current book included, in library order (the tape shelf) */
+  collection: Book[];
   kind: PlayerKind;
   deckKey: DeckKey;
   isPlaying: boolean;
@@ -73,18 +75,46 @@ function Drum({ names, current, onPick }: { names: string[]; current: number; on
   );
 }
 
+/** A cassette with its label and reels; the one in the deck has its hubs turned by the animation loop */
+function Cassette({ book, rl, rr, hubL, hubR }: { book: Book; rl: number; rr: number; hubL?: React.Ref<HTMLDivElement>; hubR?: React.Ref<HTMLDivElement> }) {
+  const tracks = book.chapters.length;
+  return (
+    <div className="dk-cassette" style={{ ['--rl' as any]: rl.toFixed(2), ['--rr' as any]: rr.toFixed(2) }}>
+      <div className="dk-shell">
+        <i className="dk-screw dk-s1" /><i className="dk-screw dk-s2" /><i className="dk-screw dk-s3" /><i className="dk-screw dk-s4" />
+        <div className="dk-label">
+          <div className="dk-label-art" style={bg(coverOf(book))} />
+          <div className="dk-label-title">{book.title}</div>
+          <div className="dk-label-side">A</div>
+          {book.author && <div className="dk-label-author">{book.author}</div>}
+          <div className="dk-label-fmt">{tracks} {tracks === 1 ? 'track' : 'tracks'}</div>
+        </div>
+        <div className="dk-win">
+          <div className="dk-reel L"><div className="dk-pack" /><div className="dk-hub" ref={hubL} /></div>
+          <div className="dk-reel R"><div className="dk-pack" /><div className="dk-hub" ref={hubR} /></div>
+          <div className="dk-glass" />
+        </div>
+        <div className="dk-cbottom"><i /><i /><i /></div>
+      </div>
+    </div>
+  );
+}
+
 export function AudioDeck(props: AudioDeckProps) {
   const { book, others, kind, deckKey, isPlaying, setIsPlaying, currentTime, duration, totalProgress, onSeek } = props;
   const vars = DECK_VARS[deckKey] as React.CSSProperties;
 
   // Live values for the animation loop and the held keys, without re-creating them each render
-  const live = useRef({ isPlaying, currentTime, wind: 0 });
+  const live = useRef({ isPlaying, currentTime, wind: 0, chapter: props.chapterIndex, duration, tracks: book.chapters.length });
   live.current.isPlaying = isPlaying; live.current.currentTime = currentTime;
+  live.current.chapter = props.chapterIndex; live.current.duration = duration; live.current.tracks = book.chapters.length;
 
   // ----- cassette: the bay, the door and the reels -----
   const [bay, setBay] = useState<Bay>('away');
   const [doorOpen, setDoorOpen] = useState(true);
   const busy = useRef(false);
+  // The shelf: tapping the door takes the cassette out and puts it over the deck, among the others
+  const [shelf, setShelf] = useState(false);
   // ----- record: slid out of its sleeve or not -----
   const [slid, setSlid] = useState(false);
   // The box or sleeve picked in the strip, lifted while the current one goes away
@@ -108,7 +138,7 @@ export function AudioDeck(props: AudioDeckProps) {
   useEffect(() => {
     setPicked(null);
     if (kind === 'tape') {
-      busy.current = false; setBay('away'); setDoorOpen(true);
+      busy.current = false; setBay('away'); setDoorOpen(true); setShelf(false);
       const t = setTimeout(insert, 350);
       return () => clearTimeout(t);
     }
@@ -146,7 +176,7 @@ export function AudioDeck(props: AudioDeckProps) {
   const [tap, setTap] = useState<string | null>(null);
   const play = () => {
     if (bay === 'in') { if (isPlaying) deckSounds.keyDown(); else { deckSounds.latch(); setIsPlaying(true); } }
-    else if (bay === 'out') { deckSounds.keyDown(); insert().then(() => { deckSounds.latch(); setIsPlaying(true); }); }
+    else if (bay === 'out' || shelf) { deckSounds.keyDown(); setShelf(false); insert().then(() => { deckSounds.latch(); setIsPlaying(true); }); }
     else deckSounds.keyDown();
   };
   const stop = () => {
@@ -156,16 +186,27 @@ export function AudioDeck(props: AudioDeckProps) {
   };
   // REW / FF: a tap jumps 15 s, holding winds faster and faster
   const [held, setHeld] = useState<number>(0);
-  const holdRef = useRef<{ timer?: number; tick?: number; step: number; wound: boolean; hush?: () => void }>({ step: 5, wound: false });
+  const holdRef = useRef<{ timer?: number; tick?: number; step: number; wound: boolean; ended?: boolean; hush?: () => void }>({ step: 5, wound: false });
   const startWind = (dir: number) => {
     if (bay !== 'in') return;
     setHeld(dir); deckSounds.keyDown();
-    const h = holdRef.current; h.wound = false; h.step = 5;
+    const h = holdRef.current; h.wound = false; h.ended = false; h.step = 5;
     h.timer = window.setTimeout(() => {
       h.wound = true; live.current.wind = dir; h.hush = deckSounds.wind();
       h.tick = window.setInterval(() => {
-        onSeekRef.current(live.current.currentTime + dir * h.step);
-        live.current.currentTime += dir * h.step;
+        const L = live.current, to = L.currentTime + dir * h.step;
+        // The tape has run out: the deck stops winding by itself and the key springs up
+        const atStart = dir < 0 && L.chapter <= 0 && to <= 0;
+        const atEnd = dir > 0 && L.chapter >= L.tracks - 1 && L.duration > 0 && to >= L.duration - 1;
+        if (atStart || atEnd) {
+          onSeekRef.current(atStart ? 0 : Math.max(0, L.duration - 1));
+          L.currentTime = atStart ? 0 : Math.max(0, L.duration - 1);
+          clearInterval(h.tick); h.tick = undefined; h.hush?.(); h.hush = undefined;
+          L.wind = 0; h.ended = true; deckSounds.release(); setHeld(0);
+          return;
+        }
+        onSeekRef.current(to);
+        L.currentTime = to;
         h.step = Math.min(40, h.step * 1.15);
       }, 160);
     }, 280);
@@ -174,12 +215,43 @@ export function AudioDeck(props: AudioDeckProps) {
     const h = holdRef.current;
     if (h.timer) clearTimeout(h.timer); if (h.tick) clearInterval(h.tick); h.timer = h.tick = undefined;
     h.hush?.(); h.hush = undefined; if (held === dir) deckSounds.keyUp();
-    if (held === dir && !h.wound && bay === 'in') onSeekRef.current(live.current.currentTime + dir * 15);
+    if (held === dir && !h.wound && bay === 'in') {
+      // a tap jumps 15 s, but no further than the start or the end of the tape
+      const L = live.current;
+      let to = L.currentTime + dir * 15;
+      if (L.chapter <= 0) to = Math.max(0, to);
+      if (L.chapter >= L.tracks - 1 && L.duration > 0) to = Math.min(L.duration - 1, to);
+      onSeekRef.current(to);
+    }
     live.current.wind = 0; h.wound = false; setHeld(0);
   };
   const onSeekRef = useRef(onSeek); onSeekRef.current = onSeek;
   useEffect(() => () => { const h = holdRef.current; if (h.timer) clearTimeout(h.timer); if (h.tick) clearInterval(h.tick); h.hush?.(); }, []);
 
+
+  // ----- the tape shelf -----
+  const openShelf = async () => {
+    if (busy.current || bay !== 'in') return; busy.current = true;
+    setIsPlaying(false); live.current.wind = 0;
+    deckSounds.eject();
+    setDoorOpen(true); await wait(250); setBay('away'); setShelf(true); await wait(450);
+    busy.current = false;
+  };
+  const closeShelf = () => { if (busy.current) return; setShelf(false); insert(); };
+  const pickTape = (b: Book) => {
+    if (busy.current) return;
+    if (b.id === book.id) { closeShelf(); return; }
+    deckSounds.keyUp(); setPicked(b.id);
+    setTimeout(() => props.onSelectBook(b), 260);
+  };
+  const tapDeck = () => { if (shelf) closeShelf(); else if (bay === 'out') insert(); else if (bay === 'in') openShelf(); };
+  // The shelf opens on the cassette that was in the deck
+  const shelfRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = shelfRef.current?.querySelector<HTMLElement>('.dk-shelf'); if (!shelf || !el) return;
+    const cur = el.querySelector<HTMLElement>('[data-current]');
+    if (cur) el.scrollLeft = cur.offsetLeft + cur.offsetWidth / 2 - el.clientWidth / 2;
+  }, [shelf]);
 
   // ----- swapping books from the strip -----
   const choose = async (b: Book) => {
@@ -213,29 +285,31 @@ export function AudioDeck(props: AudioDeckProps) {
   return (
     <div className="dk" style={vars}>
       {kind === 'tape' ? (
+        <div className={`dk-tape${shelf ? ' shelf' : ''}`} ref={shelfRef}>
+        {/* The shelf over the deck: the cassette taken out, among the rest of the collection */}
+        <AnimatePresence>
+          {shelf && (
+            <motion.div className="dk-shelf" key="shelf"
+              initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40, transition: { duration: 0.25 } }}
+              transition={{ type: 'spring', stiffness: 260, damping: 28 }}>
+              {props.collection.map(b => (
+                <motion.button key={b.id} type="button" className="dk-shelf-tape" data-current={b.id === book.id ? '' : undefined}
+                  aria-label={b.id === book.id ? `Вернуть «${b.title}» в деку` : `Поставить «${b.title}»`}
+                  onClick={() => pickTape(b)}
+                  animate={picked === b.id ? { y: 90, scale: 0.9, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
+                  whileTap={{ scale: 0.97 }} transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
+                  <Cassette book={b} rl={b.id === book.id ? rl : RMAX} rr={b.id === book.id ? rr : RMIN} />
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="dk-deck dk-vertical">
           {/* The deck stands upright: the bay is drawn landscape and turned a quarter */}
-          <div className="dk-upright">
+          <div className="dk-upright" onClick={tapDeck} role="button" aria-label={shelf ? 'Вставить кассету обратно' : 'Открыть крышку и достать кассету'}>
           <div className={`dk-bay ${bay === 'in' ? '' : bay}${doorOpen ? ' open' : ''}`}>
-            <div className="dk-slot" onClick={() => { if (bay === 'out') insert(); }}>
-              <div className="dk-cassette" style={{ ['--rl' as any]: rl.toFixed(2), ['--rr' as any]: rr.toFixed(2) }}>
-                <div className="dk-shell">
-                  <i className="dk-screw dk-s1" /><i className="dk-screw dk-s2" /><i className="dk-screw dk-s3" /><i className="dk-screw dk-s4" />
-                  <div className="dk-label">
-                    <div className="dk-label-art" style={bg(cover)} />
-                    <div className="dk-label-title">{book.title}</div>
-                    <div className="dk-label-side">A</div>
-                    {book.author && <div className="dk-label-author">{book.author}</div>}
-                    <div className="dk-label-fmt">{tracks} {tracks === 1 ? 'track' : 'tracks'}</div>
-                  </div>
-                  <div className="dk-win">
-                    <div className="dk-reel L"><div className="dk-pack" /><div className="dk-hub" ref={hubL} /></div>
-                    <div className="dk-reel R"><div className="dk-pack" /><div className="dk-hub" ref={hubR} /></div>
-                    <div className="dk-glass" />
-                  </div>
-                  <div className="dk-cbottom"><i /><i /><i /></div>
-                </div>
-              </div>
+            <div className="dk-slot">
+              <Cassette book={book} rl={rl} rr={rr} hubL={hubL} hubR={hubR} />
             </div>
             <div className="dk-door">
               <div className="dk-door-face" style={bg(lidArt(deckKey))} />
@@ -265,6 +339,7 @@ export function AudioDeck(props: AudioDeckProps) {
               );
             })}
           </div>
+        </div>
         </div>
       ) : (
         <>
