@@ -3,8 +3,12 @@ import { useLibrary } from "./hooks/useLibrary";
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { motion } from 'motion/react';
 import LibrarySidebar from './components/LibrarySidebar';
-import ChapterSidebar from './components/ChapterSidebar';
 import PlayerControls from './components/PlayerControls';
+import { AudioDeck } from './components/AudioDeck';
+import { deckKeyOf, generatedCover } from './utils/deckArt';
+import { useCoverTint, tintBackground } from './utils/coverTint';
+import { assignPlayerKinds, expectNewAudiobooks, deckKindOf, isInCollection, savedPlayerMode, savePlayerMode, forgetPlayerKind } from './utils/playerMode';
+import ChapterSidebar from './components/ChapterSidebar';
 import EBookControls from './components/EBookControls';
 import { Book, PersistedState, AppMode, Chapter } from './types';
 import { calculateTotalProgress } from './utils/time';
@@ -881,6 +885,35 @@ function App() {
 
   // --- Render ---
   const activeBooks = books.filter(b => !deletedBookIds.includes(b.id));
+  // Player mode: tapes and albums ("add tape" / "add album") form the collection, apart from the library
+  const [isPlayerMode, setIsPlayerMode] = useState(savedPlayerMode);
+  const [, setKindsVersion] = useState(0);
+  const knownIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (knownIds.current && assignPlayerKinds(books, knownIds.current)) setKindsVersion(v => v + 1);
+    if (isLibraryReady) knownIds.current = new Set(books.map(b => b.id));
+  }, [books, isLibraryReady]);
+  const inMode = (b: Book) => isInCollection(b) === isPlayerMode;
+  const deckKind = currentBook && mode === 'audio' ? deckKindOf(currentBook.id) : null;
+  // The player takes on the colour of the tape's or album's cover
+  const coverTint = useCoverTint(deckKind && currentBook ? (currentBook.coverUrl || generatedCover(currentBook.title, currentBook.author)) : null);
+  // Tapes and albums play at their own speed; the speed choice stays with the standard player
+  useEffect(() => { if (deckKind && playbackRate !== 1) setPlaybackRate(1); }, [deckKind, playbackRate]);
+
+  /** Library ⇄ collection: opens the last book listened to on the other side and shows its list */
+  const switchCollection = async () => {
+    const next = !isPlayerMode;
+    if (currentBook) { if (mode === 'audio') setIsPlaying(false); await saveState(true); }
+    setIsPlayerMode(next); savePlayerMode(next);
+    setTitleClickKey(k => k + 1);
+    setIsCatalogOpen(false);
+    const pool = activeBooks.filter(b => !b.missing && isInCollection(b) === next);
+    const last = (b: Book) => bookProgressMap[b.id]?.lastUpdated || 0;
+    const best = pool.reduce<Book | null>((a, b) => (!a || last(b) > last(a) ? b : a), null);
+    if (best) handleSelectBook(best);
+    else { setCurrentBook(null); setMode(next ? 'audio' : 'ebook'); }
+    setTimeout(() => setIsSidebarOpen(true), 60);
+  };
 
   // A grey book: a catalog book downloads again, any other asks for its file
   const openMissingBook = (book: Book) => {
@@ -941,8 +974,8 @@ function App() {
   };
 
   // Player notification for audiobooks (also on the lock screen and headphones)
-  const audioActionsRef = useRef({ togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate });
-  audioActionsRef.current = { togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate };
+  const audioActionsRef = useRef({ togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate, fixedSpeed: false });
+  audioActionsRef.current = { togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate, fixedSpeed: !!deckKind };
   const audioNotifiedRef = useRef(false);
   useEffect(() => {
     if (!isNativePlayer) return;
@@ -954,7 +987,7 @@ function App() {
       else if (e.action === 'forward') a.seekInBook(a.currentTime + 10);
       else if (e.action === 'seek') a.seekAudio(e.position);
       // Same steps and limits as the speed buttons of the player
-      else if (e.action === 'slower' || e.action === 'faster') {
+      else if ((e.action === 'slower' || e.action === 'faster') && !a.fixedSpeed) {
         const r = Math.round((a.playbackRate + (e.action === 'faster' ? 0.25 : -0.25)) * 4) / 4;
         a.setPlaybackRate(Math.max(1, Math.min(5, r)));
       }
@@ -986,11 +1019,12 @@ function App() {
         position: currentTime,
         duration,
         speed: playbackRate,
+        fixedSpeed: !!deckKind,
       }).catch(() => {});
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentBook?.id, currentChapterIndex, isPlaying, isAudioLoading, duration, playbackRate, styleName, positionBucket]);
+  }, [mode, currentBook?.id, currentChapterIndex, isPlaying, isAudioLoading, duration, playbackRate, styleName, positionBucket, deckKind]);
 
   // Colours of the added styles (Code, Byte, Mint, Jazz) on top of their base style's CSS
   useLayoutEffect(() => { applyStyleVariant(variantOf(styleName)); }, [styleName, theme, isStyledMode]);
@@ -1047,7 +1081,7 @@ function App() {
       />
       <LibrarySidebar 
         catalogNames={catalogNames}
-        books={missingShelf.length ? [...activeBooks, ...missingShelf] : activeBooks}
+        books={(missingShelf.length ? [...activeBooks, ...missingShelf] : activeBooks).filter(inMode)}
         currentBookId={currentBook?.id || null}
         onSelectBook={(book, forceFormatAsFb2) => {
           if (book.missing) { openMissingBook(book); return; }
@@ -1062,10 +1096,11 @@ function App() {
         onAppStyleChange={handleAppStyleChange}
         currentBookFormat={currentBook?.format || null}
         // Close the library so the newly added book is visible once it opens
-        onExternalFilePicked={(files) => { setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFilePicked(files); }}
+        onExternalFilePicked={(files) => { if (!isPlayerMode) expectNewAudiobooks(null); setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFilePicked(files); }}
         onExternalFolderPicked={(files) => { setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFolderPicked(files); }}
         onDeleteBook={(id) => {
           if (missingShelf.some(b => b.id === id)) { forgetMissingBook(id); deleteBookHistory(id); return; }
+          forgetPlayerKind(id);
           return handleDeleteBook(id);
         }}
         mode={mode}
@@ -1078,6 +1113,9 @@ function App() {
           setIsCatalogOpen(true);
           setIsSidebarOpen(false);
         }}
+        isPlayerMode={isPlayerMode}
+        onSwitchPlayerMode={switchCollection}
+        onAddAudio={(kind) => expectNewAudiobooks(kind)}
       />
 
       <CatalogSidebar
@@ -1107,6 +1145,7 @@ function App() {
             bookId={currentBook.id}
             appStyle={appStyle}
             isAudio={mode === 'audio'}
+            isTracks={!!deckKind}
             onSelectChapter={(i) => { 
                 setNavStack(prev => [...prev, { chapterIndex: currentChapterIndex, progress: readerProgress }]);
                 if (mode === 'audio') {
@@ -1171,10 +1210,12 @@ function App() {
                 setLibraryClickKey(k => k + 1);
                 toggleLibrary();
             }}
+            isPlayerMode={isPlayerMode}
             onSwitchMode={() => {
                 setTitleClickKey(k => k + 1);
                 setIsCatalogOpen(false);
-                switchMode();
+                // In the player the title is just a title; in the library it switches audio ⇄ text as before
+                if (!isPlayerMode) switchMode(b => !isInCollection(b));
             }}
             onToggleChapters={() => {
                 setChaptersClickKey(k => k + 1);
@@ -1248,13 +1289,50 @@ function App() {
                 isNative={isNative} 
                 appStyle={appStyle} 
                 styleName={styleName}
-                onExternalFilePicked={handleExternalFilePicked}
+                onExternalFilePicked={(files) => { if (!isPlayerMode) expectNewAudiobooks(null); return handleExternalFilePicked(files); }}
                 onExternalFolderPicked={handleExternalFolderPicked}
                 currentBook={currentBook}
                 onOpenCatalog={() => setIsCatalogOpen(true)}
+                isPlayerMode={isPlayerMode}
+                onAddAudio={(kind) => expectNewAudiobooks(kind)}
              />
           ) : (
-            mode === 'audio' ? (
+            mode === 'audio' && deckKind ? (
+                // Player mode: the cassette deck or the record, with the rest of the collection under it
+                <div className={`flex-1 w-full min-h-0 overflow-hidden ${deckKind === 'tape' ? 'px-2 pt-20 pb-0' : 'px-4 pt-[124px] pb-6'} flex flex-col`}
+                     style={coverTint ? { background: tintBackground(coverTint), transition: 'background .6s' } : undefined}>
+                    <AudioDeck
+                        book={currentBook}
+                        others={activeBooks.filter(b => b.id !== currentBook.id && !b.missing && b.type === 'audio' && deckKindOf(b.id) === deckKind)}
+                        collection={activeBooks.filter(b => (b.id === currentBook.id || !b.missing) && b.type === 'audio' && deckKindOf(b.id) === deckKind)}
+                        kind={deckKind}
+                        deckKey={deckKeyOf(appStyle, styleName)}
+                        isPlaying={isPlaying}
+                        setIsPlaying={(v) => {
+                            // The deck's keys act at once: pause the audio before React gets round to it
+                            const el = audioRef.current;
+                            if (!v && el && !el.paused) el.pause();
+                            if (v && el && el.paused) { togglePlay(); return; }
+                            setIsPlaying(v);
+                        }}
+                        isLoading={isAudioLoading}
+                        currentTime={currentTime}
+                        duration={duration}
+                        chapterIndex={currentChapterIndex}
+                        totalProgress={calculateTotalProgress(currentChapterIndex, currentBook.chapters, currentTime, duration)}
+                        onSeek={seekInBook}
+                        onPrevChapter={() => {
+                            if (currentTime > 5) seekAudio(0);
+                            else if (currentChapterIndex > 0) setCurrentChapterIndex(p => p - 1);
+                        }}
+                        onNextChapter={() => {
+                            if (currentChapterIndex < currentBook.chapters.length - 1) setCurrentChapterIndex(p => p + 1);
+                        }}
+                        onSelectChapter={(i) => { if (i !== currentChapterIndex) { setCurrentTime(0); setCurrentChapterIndex(i); } }}
+                        onSelectBook={(b) => handleSelectBook(b)}
+                    />
+                </div>
+            ) : mode === 'audio' ? (
                 // Audio Player needs padding to not be hidden by header
                 <div className="flex-1 flex flex-col items-center justify-center p-4 pt-20 pb-4 md:pb-8 w-full min-h-0 overflow-hidden">
                     <div className="w-full flex-1 flex flex-col items-center justify-center gap-4 md:gap-8 min-h-0">

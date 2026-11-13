@@ -2,6 +2,8 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Book, AppMode } from '../types';
 import { variantOf } from '../utils/styleVariants';
+import { deckKeyOf } from '../utils/deckArt';
+import { PLAYER_EMOJI } from '../utils/playerMode';
 
 interface AppHeaderProps {
   isImmersive: boolean;
@@ -17,6 +19,8 @@ interface AppHeaderProps {
   onSwitchMode: () => void;
   onToggleChapters: () => void;
   isCatalogView?: boolean;
+  /** In the player (tapes and albums): "…Tape" and the player's buttons */
+  isPlayerMode?: boolean;
   onToggleCatalogFilter?: () => void;
   onBackFromCatalog?: () => void;
 }
@@ -34,6 +38,7 @@ export function AppHeader({
   onSwitchMode,
   onToggleChapters,
   isCatalogView = false,
+  isPlayerMode = false,
   onToggleCatalogFilter,
   onBackFromCatalog
 }: AppHeaderProps) {
@@ -43,6 +48,9 @@ export function AppHeader({
   const isSurf = appStyle === 'Surf';
   const isMarcel = appStyle === 'Marcel';
   const v = variantOf(styleName);
+  // Player mode: "…Tape" instead of "…Read", and the collection / tracks buttons of the style
+  const player = isPlayerMode ? PLAYER_EMOJI[deckKeyOf(appStyle, styleName)] : null;
+  const word = player ? 'Tape' : 'Read';
 
   return (
     <div
@@ -78,8 +86,8 @@ export function AppHeader({
             <button
               onClick={onToggleLibrary}
               className="p-2 flex items-center justify-center text-3xl"
-              title="Библиотека"
-              aria-label="Библиотека"
+              title={player ? 'Коллекция' : 'Библиотека'}
+              aria-label={player ? 'Коллекция' : 'Библиотека'}
             >
               <motion.span
                 key={`library-pulse-${libraryClickKey}`}
@@ -87,7 +95,7 @@ export function AppHeader({
                 transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
                 className="inline-block emoji"
               >
-                {v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚'}
+                {player ? player.collection : v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : isFF ? '🎒' : isBimbo ? '💖' : isSurf ? '🏖️' : '📚'}
               </motion.span>
             </button>
           )}
@@ -114,7 +122,7 @@ export function AppHeader({
         >
           {isMarcel ? (
             <div className="flex items-center justify-center text-3xl pt-1">
-              <span>MarcelRead</span>
+              <span>Marcel{word}</span>
               <motion.span
                 key={`title-emoji-${titleClickKey}`}
                 animate={titleClickKey > 0 ? { scale: [1, 1.4, 1] } : { scale: 1 }}
@@ -154,7 +162,7 @@ export function AppHeader({
                 isDragon ? 'tracking-[0.05em]' : 
                 'tracking-[0.05em]'
               }`}>
-                Read
+                {word}
               </span>
             </div>
           )}
@@ -194,7 +202,7 @@ export function AppHeader({
                 transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
                 className="inline-block emoji"
               >
-                {v ? v.chaptersEmoji : isMarcel ? '🪻' : isDragon ? '🏰' : isFF ? '📜' : isBimbo ? '💎' : isSurf ? '🐚' : '📖'}
+                {player ? player.tracks : v ? v.chaptersEmoji : isMarcel ? '🪻' : isDragon ? '🏰' : isFF ? '📜' : isBimbo ? '💎' : isSurf ? '🐚' : '📖'}
               </motion.span>
             </button>
           )}

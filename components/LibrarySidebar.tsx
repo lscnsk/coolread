@@ -7,6 +7,9 @@ import { PRESET_FONTS, getFontFamilyCSS } from '../utils/fonts';
 import { SmartCoverImage } from './SmartCoverImage';
 import { addToHomeScreen, watchHomeScreen, offerFullVersion, RUSTORE_URL, APK_URL } from '../utils/telegram';
 import { openSite } from '../utils/webBrowser';
+import { DeckSkin, listDeckSkins, activeDeckSkinId, setActiveDeckSkin, deleteDeckSkin, deckSkinUrl, onDeckSkinChange, uploadDeckSkin, saveDeckSkinTemplate } from '../utils/deckSkin';
+import { deckKeyOf, generatedCover } from '../utils/deckArt';
+import { PLAYER_EMOJI, PlayerKind } from '../utils/playerMode';
 
 interface LibrarySidebarProps {
   books: Book[];
@@ -31,6 +34,12 @@ interface LibrarySidebarProps {
   onDeleteCustomFont?: (name: string) => void;
   onOpenCatalog?: () => void;
   catalogNames?: string;
+  /** The player's collection of tapes and albums is shown instead of the library */
+  isPlayerMode?: boolean;
+  /** Library ⇄ collection: the button pinned to the bottom of the panel */
+  onSwitchPlayerMode?: () => void;
+  /** Called before the file picker opens for "add tape" / "add album" */
+  onAddAudio?: (kind: PlayerKind) => void;
 }
 
 // Style buttons in Settings: on mouse hover each one lights up in its own style.
@@ -69,7 +78,10 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   onAddCustomFont,
   onDeleteCustomFont,
   onOpenCatalog,
-  catalogNames
+  catalogNames,
+  isPlayerMode = false,
+  onSwitchPlayerMode,
+  onAddAudio
 }) => {
   const [view, setView] = useState<'library' | 'settings'>('library');
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -110,6 +122,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
     return [...filteredPresets, ...customOptions];
   }, [customFonts]);
   const bookInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -204,6 +217,32 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   const isMarcel = appStyle === 'Marcel';
   const v = variantOf(styleName);
   const chosen = styleName ?? appStyle;
+  // The deck skin (player mode settings)
+  const skinInputRef = useRef<HTMLInputElement>(null);
+  const [skins, setSkins] = useState<DeckSkin[]>([]);
+  const [skinOnId, setSkinOnId] = useState<string | null>(activeDeckSkinId);
+  const [skinNote, setSkinNote] = useState('');
+  useEffect(() => {
+    let live = true;
+    const load = () => { setSkinOnId(activeDeckSkinId()); listDeckSkins().then(l => { if (live) setSkins(l); }); };
+    load();
+    const off = onDeckSkinChange(load);
+    return () => { live = false; off(); };
+  }, []);
+  const skinTone = isMarcel 
+                       ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]' 
+                       : isBimbo 
+                       ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]' 
+                       : isSurf 
+                       ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]' 
+                       : isDragon
+                       ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                       : isFF
+                       ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                       : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]';
+
+  const skinOnTone = isMarcel ? 'bg-[#E8E0F5] border-[#AC97D7] text-[#2F2440]' : isBimbo ? 'bg-[#FFF0F5] border-[#F472B6] text-[#BE123C]' : isSurf ? 'bg-sky-50 border-[#7dd3fc] text-[#0c4a6e]' : isDragon ? 'bg-[#4a2511] border-[#b45309] text-[#fcd34d]' : isFF ? 'bg-[#17335e] border-[#dfc894] text-[#f0deba]' : 'bg-[#45413e] border-[#888] text-[#fffff0]';
+  const skinIdleTone = isMarcel ? 'border-transparent text-[#544372] hover:bg-[#E8E0F5]/50' : isBimbo ? 'border-transparent text-[#BE123C]/80 hover:bg-white/40' : isSurf ? 'border-transparent text-[#0284c7] hover:bg-white/40' : isDragon ? 'border-transparent text-[#fcd34d]/80 hover:bg-[#3a1a0e]' : isFF ? 'border-transparent text-[#f0deba]/80 hover:bg-[#0d2347]' : 'border-transparent text-[#aaa] hover:bg-[#363330] hover:text-[#fff]';
   // Unselected style buttons in Settings: a quiet border in the current style's colors
   const styleBtnIdle = (name: string) => `${
     isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isMarcel ? 'border-[#DBD0EF]' : isDragon ? 'border-[#4a2511]' : isFF ? 'border-[#17335e]' : 'border-[#363330]'
@@ -268,7 +307,9 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         <div 
             className={`shrink-0 bg-[#23211f] flex items-center justify-center border relative z-10 overflow-hidden rounded ${isSelected ? 'border-[#57534e]' : 'border-[#45413e]'} ${isAudio ? 'w-12 h-12' : 'w-10 h-14'}`}
         >
-            {book.coverUrl ? (
+            {!book.coverUrl && isAudio && isPlayerMode ? (
+                <img src={generatedCover(book.title, book.author)} alt="" className="w-full h-full object-cover" />
+            ) : book.coverUrl ? (
                 <SmartCoverImage
                   src={book.coverUrl}
                   alt="Cover"
@@ -397,8 +438,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           <h2 className="text-xl font-bold flex items-center gap-1.5 text-[#fffff0] min-w-0 flex-1 overflow-hidden">
             {view === 'library' ? (
               <>
-                <span className="text-3xl leading-none flex-shrink-0 emoji">{v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
-                <span className={`leading-normal whitespace-nowrap ${v ? v.panelTitleClass : isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Library</span>
+                <span className="text-3xl leading-none flex-shrink-0 emoji">{isPlayerMode ? PLAYER_EMOJI[deckKeyOf(appStyle, styleName)].collection : v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
+                <span className={`leading-normal whitespace-nowrap ${isPlayerMode ? 'inline-block origin-left scale-[0.88]' : ''} ${v ? v.panelTitleClass : isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>{isPlayerMode ? 'Collection' : 'Library'}</span>
               </>
             ) : (
               <>
@@ -534,6 +575,70 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                     );
                   })}
                 </div>
+
+                {/* Player: the user's own skin for the cassette deck door, and the template to paint it on */}
+                {isPlayerMode && (
+                  <div className="pt-2 space-y-1.5">
+                    <div className="flex h-[64px] gap-0">
+                      <button
+                        onClick={() => skinInputRef.current?.click()}
+                        className={`flex-1 min-w-0 px-2 py-1 border-2 border-dashed rounded-l transition-all flex items-center gap-2 group text-left ${skinTone}`}
+                      >
+                        <span className="text-xl group-hover:scale-110 transition-transform emoji">🎨</span>
+                        <div className="flex flex-col min-w-0 flex-1 justify-center">
+                          <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">Upload customization</span>
+                          <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">png, jpg, webp</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { saveDeckSkinTemplate(deckKeyOf(appStyle, styleName)).then(where => setSkinNote(`Template saved: ${where}`), e => setSkinNote(`Could not save: ${e?.message || e}`)); }}
+                        className={`w-[64px] shrink-0 border-2 border-dashed border-l-0 rounded-r transition-all flex flex-col items-center justify-center gap-0.5 ${skinTone}`}
+                        title="Download the template"
+                        aria-label="Download the template"
+                      >
+                        <span className="text-xl emoji leading-none">⬇️</span>
+                        <span className="text-[8.5px] font-bold uppercase tracking-wider opacity-80">template</span>
+                      </button>
+                    </div>
+                    {skinNote && <div className="text-[10px] opacity-70 font-mono px-1 break-all">{skinNote}</div>}
+                    {/* The skins added so far: tap one to put it on the deck (or take it off), 🗑️ deletes it */}
+                    {skins.length > 0 && (
+                      <div className="flex flex-col gap-1.5 pt-0.5">
+                        {skins.map(sk => {
+                          const on = sk.id === skinOnId;
+                          return (
+                            <div key={sk.id}
+                              onClick={() => { setActiveDeckSkin(on ? null : sk.id); setSkinNote(on ? 'The deck has its own door again' : ''); }}
+                              className={`flex items-center gap-2.5 px-2 py-1.5 rounded border cursor-pointer transition-all ${on ? skinOnTone : skinIdleTone}`}
+                              role="button" aria-pressed={on}>
+                              <span className="relative w-8 h-12 shrink-0 rounded-sm overflow-hidden bg-black/30" style={{ containerType: 'inline-size' } as React.CSSProperties}>
+                                <span className="absolute left-1/2 top-1/2 block" style={{ width: '150cqw', height: '100cqw', transform: 'translate(-50%,-50%) rotate(90deg)', backgroundImage: `url("${deckSkinUrl(sk)}")`, backgroundSize: '100% 100%' }} />
+                              </span>
+                              <span className="flex-1 min-w-0 flex flex-col">
+                                <span className="text-sm truncate">{sk.name}</span>
+                                <span className="text-[9px] opacity-60 font-mono uppercase tracking-wider">{on ? 'on the deck' : 'tap to use'}</span>
+                              </span>
+                              <button type="button"
+                                onClick={(e) => { e.stopPropagation(); deleteDeckSkin(sk.id).then(() => setSkinNote(`Deleted: ${sk.name}`)); }}
+                                className="p-1.5 opacity-60 hover:opacity-100 transition-opacity emoji text-base shrink-0"
+                                title="Delete skin" aria-label={`Delete skin ${sk.name}`}>🗑️</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      ref={skinInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]; e.target.value = '';
+                        if (f) uploadDeckSkin(f).then(() => setSkinNote(''), err => setSkinNote(`Could not use it: ${err?.message || err}`));
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* Font Selection Button & Dropdown (Hidden in audio mode) */}
                 {mode !== 'audio' && (
@@ -838,7 +943,48 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
 
              {/* Add Book Buttons Area */}
             {!isSearchMode && !searchQuery && (
-              <div className="mt-2 pb-12 space-y-2">
+              <div className="mt-2 pb-3 space-y-2">
+                 {/* Player mode: a cassette or an album, the player plays it as one */}
+                 {isPlayerMode && ([['tape', '📼', 'Add tape', 'plays as a cassette · mp3, m4b, m4a'], ['vinyl', '💿', 'Add album', 'plays as a record · mp3, m4b, m4a']] as const).map(([kind, emoji, title, hint]) => (
+                   <button
+                     key={kind}
+                     onClick={() => { onAddAudio?.(kind); audioInputRef.current?.click(); }}
+                     className={`w-full h-[64px] shrink-0 px-2.5 py-1 border-2 border-dashed rounded transition-all flex items-center gap-3 group text-left ${
+                     isMarcel 
+                       ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]' 
+                       : isBimbo 
+                       ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]' 
+                       : isSurf 
+                       ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]' 
+                       : isDragon
+                       ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                       : isFF
+                       ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                       : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]'
+                   }`}
+                   >
+                     <div className={`w-10 h-14 shrink-0 rounded flex items-center justify-center ${
+                     isMarcel
+                       ? 'bg-[#C4B5E6]/40 text-[#544372]'
+                       : isBimbo
+                       ? 'bg-[#FBCFE8]/60 text-[#BE123C]'
+                       : isSurf
+                       ? 'bg-[#BAE6FD]/60 text-[#0284c7]'
+                       : isDragon
+                       ? 'bg-[#7f1d1d]/60 text-[#fcd34d]'
+                       : isFF
+                       ? 'bg-[#406da3]/60 text-[#dfc894]'
+                       : 'bg-[#45413e]/70 text-[#fffff0]'
+                   }`}>
+                       <span className="text-xl group-hover:scale-110 transition-transform emoji">{emoji}</span>
+                     </div>
+                     <div className="flex flex-col min-w-0 flex-1 justify-center">
+                        <span className="text-xs font-bold uppercase tracking-wider">{title}</span>
+                        <span className="text-[8.5px] opacity-60 font-mono mt-0.5 leading-snug line-clamp-1">{hint}</span>
+                     </div>
+                   </button>
+                 ))}
+                 {!isPlayerMode && (<>
                  {/* 1. Add books button */}
                  <button 
                    onClick={() => bookInputRef.current?.click()}
@@ -957,6 +1103,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                      </div>
                    </button>
                  )}
+                 </>)}
                  {/* 4. Lite version in Telegram: an icon on the phone's home screen */}
                  {(homeScreen === 'missed' || homeScreen === 'unknown') && (
                    <button 
@@ -1015,6 +1162,20 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
               }}
             />
 
+            {/* Hidden File Input for Add Tape / Add Album */}
+            <input
+              type="file"
+              ref={audioInputRef}
+              className="hidden"
+              multiple
+              accept={Capacitor.isNativePlatform() ? undefined : ".mp3,.m4b,.m4a,.mp4,audio/*,.jpg,.jpeg,.png,.webp,image/*"}
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0 && onExternalFilePicked) onExternalFilePicked(files);
+                e.target.value = '';
+              }}
+            />
+
             {/* Hidden Folder Input for Add Folder */}
             <input 
               type="file" 
@@ -1033,6 +1194,27 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           </>
         ) : null}
       </div>
+      {/* Reader ⇄ player: always at the bottom of the library; the list scrolls under it */}
+      {view === 'library' && onSwitchPlayerMode && (
+        <div className="shrink-0 p-3 pt-2 border-t border-[#45413e]">
+          <button onClick={onSwitchPlayerMode} className={`w-full h-[52px] shrink-0 px-3 border-2 rounded transition-all flex items-center justify-center gap-2 group mb-1 mt-1 ${
+                            isMarcel
+                              ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]'
+                              : isBimbo
+                              ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]'
+                              : isSurf
+                              ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]'
+                              : isDragon
+                              ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                              : isFF
+                              ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                              : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]'
+                          }`}>
+            <span className="text-xl leading-none emoji group-hover:scale-110 transition-transform">{isPlayerMode ? '📖' : '🎧'}</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isPlayerMode ? 'Switch to reader' : 'Switch to player'}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

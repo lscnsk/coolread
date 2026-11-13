@@ -1,0 +1,135 @@
+/* Player mode ("Tape"): a cassette deck or a record coming out of its sleeve, and a strip of the
+   other books in the collection underneath. Colours come from the --dk-* custom properties set
+   for the current style (utils/deckArt.ts, DECK_VARS), so every style repaints it. */
+/* centred in the free space, but never closer than the screen's top padding to the header */
+.dk{position:relative;width:100%;max-width:440px;margin:auto;color:var(--text);font-family:var(--ui);-webkit-tap-highlight-color:transparent}
+.dk button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.dk button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+
+/* ---------- deck ---------- */
+.dk-deck{position:relative;border-radius:20px;padding:14px;background:linear-gradient(170deg,var(--deck1),var(--deck2));box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 0 0 1px rgba(255,255,255,.07),0 1px 3px rgba(0,0,0,.12)}
+.dk-bay{position:relative;z-index:2;border-radius:12px;padding:5%;background:var(--window);box-shadow:inset 0 4px 14px rgba(0,0,0,.6);perspective:1400px}
+.dk-slot{position:relative;transition:transform .7s cubic-bezier(.3,.9,.3,1),opacity .5s;cursor:pointer}
+.dk-bay.out .dk-slot{transform:translateY(-58%)}
+.dk-bay.away .dk-slot{transform:translateY(-150%) rotate(-6deg);opacity:0}
+.dk-door{position:absolute;inset:0;border-radius:12px;pointer-events:none;overflow:hidden;transform-origin:50% 100%;transition:transform .5s cubic-bezier(.3,1.45,.5,1),filter .5s}
+.dk-door-face{position:absolute;inset:0;background-size:100% 100%;background-repeat:no-repeat}
+.dk-door-glass{position:absolute;left:10%;right:10%;top:12%;height:47%;box-shadow:inset 0 6px 12px rgba(0,0,0,.45);border-radius:10px;background:linear-gradient(110deg,rgba(255,255,255,.22),transparent 40%,transparent 65%,rgba(255,255,255,.1) 75%,transparent 85%)}
+.dk-door-sheen{position:absolute;inset:0;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 30%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 0 0 1px rgba(0,0,0,.25)}
+.dk-bay.open .dk-door{transform:rotateX(-32deg) scaleX(.92);filter:brightness(.8)}
+.dk-bay::after{content:"";position:absolute;inset:0;border-radius:12px;pointer-events:none;background:linear-gradient(transparent 60%,rgba(0,0,0,.45));opacity:0;transition:opacity .4s}
+.dk-bay.open::after{opacity:1}
+
+/* tape: the deck, and the shelf of cassettes that comes up over it when the door is tapped */
+.dk-tape{position:relative}
+.dk-upright{cursor:pointer}
+/* the shelf lies over the deck's bay: the cassettes stand upright as in the deck and scroll sideways */
+.dk-shelf{position:absolute;z-index:5;top:0;bottom:98px;left:50%;width:100vw;margin-left:-50vw;display:flex;align-items:center;gap:16px;overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;padding:0 calc(50vw - min(29vw,115px));scrollbar-width:none;overscroll-behavior-x:contain}
+.dk-shelf::-webkit-scrollbar{display:none}
+.dk .dk-shelf-tape{flex:0 0 min(58vw,230px);scroll-snap-align:center;filter:drop-shadow(0 10px 14px rgba(0,0,0,.45))}
+.dk-up-tape{position:relative;width:100%;aspect-ratio:63/100;container-type:inline-size}
+.dk-up-inner{position:absolute;left:50%;top:50%;width:calc(100cqw * 100 / 63);transform:translate(-50%,-50%) rotate(90deg)}
+.dk-vertical{max-width:min(100%,calc((100dvh - 230px) * .7));margin:0 auto}
+/* upright deck: the landscape bay is turned a quarter inside a 2:3 frame */
+.dk-upright{position:relative;width:100%;aspect-ratio:2/3;container-type:inline-size}
+.dk-upright > .dk-bay{position:absolute;left:50%;top:50%;width:150cqw;transform:translate(-50%,-50%) rotate(90deg)}
+
+/* keys: a row of piano keys coming out of a recessed slot; a pressed key sinks and shows less of its front */
+.dk-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:14px;padding:6px 6px 0;height:70px;overflow:hidden;border-radius:10px 10px 4px 4px;
+  background:color-mix(in oklab,var(--deck2) 65%,#000);box-shadow:inset 0 4px 9px rgba(0,0,0,.6),inset 0 0 0 1px rgba(0,0,0,.3)}
+.dk .dk-key{position:relative;height:72px;border-radius:5px 5px 2px 2px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;padding-top:15px;color:var(--key-text);
+  background:linear-gradient(180deg,color-mix(in oklab,var(--key1) 60%,#fff) 0,color-mix(in oklab,var(--key1) 82%,#fff) 10%,color-mix(in oklab,var(--key1) 90%,#fff) 45%,var(--key1) 100%);
+  box-shadow:inset 0 -14px 0 color-mix(in oklab,var(--key2) 80%,#000),inset 0 1px 0 rgba(255,255,255,.35),inset 1px 0 0 rgba(255,255,255,.08),inset -1px 0 0 rgba(0,0,0,.25);
+  transition:transform .07s ease-out,box-shadow .07s ease-out;touch-action:none;user-select:none;-webkit-user-select:none}
+.dk-key svg{width:16px;height:16px;fill:currentColor}
+.dk-key small{font:700 9.5px/1 var(--ui);letter-spacing:.12em;opacity:.85}
+.dk .dk-key.down{transform:translateY(7px);box-shadow:inset 0 -7px 0 color-mix(in oklab,var(--key2) 55%,#000),inset 0 1px 0 rgba(255,255,255,.2),inset 0 12px 16px rgba(0,0,0,.2)}
+.dk-led{position:absolute;top:6px;width:5px;height:5px;border-radius:50%;background:rgba(0,0,0,.35);box-shadow:inset 0 1px 1px rgba(0,0,0,.4);transition:background .2s,box-shadow .2s}
+.dk-key:not(.k-play) .dk-led{display:none}
+.dk-key.latched .dk-led{background:var(--key-on1);box-shadow:0 0 6px var(--key-on1),0 0 2px var(--key-on1)}
+
+/* ---------- cassette ---------- */
+.dk-cassette{container-type:inline-size;width:100%}
+.dk-shell{position:relative;height:63cqw;border-radius:4cqw;background:linear-gradient(160deg,var(--shell1),var(--shell2) 70%);box-shadow:0 14px 26px -12px rgba(0,0,0,.6),inset 0 0 0 .5cqw rgba(255,255,255,.08)}
+.dk-shell::after{content:"";position:absolute;inset:0;border-radius:4cqw;pointer-events:none;background:var(--shell-fx,none)}
+.dk-screw{position:absolute;width:2.6cqw;height:2.6cqw;border-radius:50%;background:radial-gradient(circle at 40% 35%,#b9b3ab,#4a4640)}
+.dk-screw::after{content:"";position:absolute;left:20%;right:20%;top:45%;height:10%;background:#2a2723}
+.dk-s1{left:2cqw;top:2cqw}.dk-s2{right:2cqw;top:2cqw}.dk-s3{left:2cqw;bottom:2cqw}.dk-s4{right:2cqw;bottom:2cqw}
+.dk-label{position:absolute;left:6cqw;right:6cqw;top:5cqw;height:40cqw;border-radius:2.2cqw;background:var(--label);overflow:hidden;color:var(--ink)}
+.dk-label-art{position:absolute;inset:0 0 auto 0;height:8.5cqw;background-size:cover;background-position:center 40%}
+.dk-label-title{position:absolute;left:4cqw;right:13cqw;top:9.2cqw;font-family:'Caveat',cursive;font-weight:700;font-size:6.5cqw;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dk-label-side{position:absolute;right:3.2cqw;top:9.6cqw;font:700 6cqw/1 var(--ui)}
+.dk-label-author{position:absolute;left:4cqw;bottom:1.8cqw;font:italic 3cqw/1 var(--ui);opacity:.75;max-width:40cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dk-label-fmt{position:absolute;right:3cqw;bottom:1.8cqw;font:3cqw/1 var(--ui);opacity:.7}
+.dk-win{position:absolute;left:20cqw;width:60cqw;top:20.5cqw;height:16cqw;border-radius:3cqw;background:var(--window);overflow:hidden;box-shadow:inset 0 0 0 .5cqw rgba(0,0,0,.5)}
+.dk-reel{position:absolute;top:8cqw;width:0;height:0}
+.dk-reel.L{left:10cqw}.dk-reel.R{left:50cqw}
+.dk-pack{position:absolute;left:0;top:0;width:calc(var(--r) * 2cqw);height:calc(var(--r) * 2cqw);transform:translate(-50%,-50%);border-radius:50%;background:repeating-radial-gradient(circle,var(--tape) 0 .35cqw,color-mix(in oklab,var(--tape) 80%,#000) .35cqw .7cqw);transition:width .6s,height .6s}
+.dk-reel.L .dk-pack{--r:var(--rl,15.5)}.dk-reel.R .dk-pack{--r:var(--rr,6.5)}
+.dk-hub{position:absolute;width:11cqw;height:11cqw;left:-5.5cqw;top:-5.5cqw;border-radius:50%;background:radial-gradient(circle,var(--window) 0 2.6cqw,var(--hub) 2.7cqw 4.4cqw,color-mix(in oklab,var(--hub) 80%,#000) 4.5cqw);will-change:transform}
+.dk-hub::before{content:"";position:absolute;inset:2.9cqw;border-radius:50%;background:repeating-conic-gradient(var(--hub) 0 16deg,transparent 16deg 60deg)}
+.dk-glass{position:absolute;inset:0;background:linear-gradient(100deg,rgba(255,255,255,.12),transparent 30%,transparent 65%,rgba(255,255,255,.07) 75%,transparent 85%);pointer-events:none}
+.dk-cbottom{position:absolute;left:19cqw;right:19cqw;bottom:0;height:11cqw;background:color-mix(in oklab,var(--shell2) 85%,#000);clip-path:polygon(7% 0,93% 0,100% 100%,0 100%);display:flex;justify-content:space-around;align-items:center;padding:0 8cqw}
+.dk-cbottom i{width:3cqw;height:3cqw;border-radius:50%;background:rgba(0,0,0,.7)}
+
+/* ---------- record from its sleeve ---------- */
+.dk-lp{position:relative;width:100%;aspect-ratio:100/66}
+.dk-jacket{position:absolute;left:3.9%;top:0;width:64%;aspect-ratio:1;border-radius:4px;background-size:cover;background-position:center;z-index:2;cursor:pointer;box-shadow:0 20px 30px -16px rgba(0,0,0,.7),inset 0 0 0 1px rgba(255,255,255,.12)}
+.dk-jacket::after{content:"";position:absolute;inset:0;border-radius:4px;background:linear-gradient(90deg,transparent 88%,rgba(0,0,0,.35)),linear-gradient(125deg,rgba(255,255,255,.14),transparent 40%)}
+.dk-record{position:absolute;left:6.9%;top:3%;width:58%;aspect-ratio:1;border-radius:50%;background:#0b0a0d;box-shadow:0 8px 20px -6px rgba(0,0,0,.8);transition:transform 1s cubic-bezier(.3,.9,.3,1);cursor:pointer}
+.dk-record.slid{transform:translateX(54%)}
+.dk-spin{position:absolute;inset:0;border-radius:50%;will-change:transform;
+  background:radial-gradient(circle,transparent 0 31%,rgba(255,255,255,.05) 31.5% 32%,transparent 32.5% 47%,rgba(255,255,255,.04) 47.5% 48%,transparent 48.5% 64%,rgba(255,255,255,.04) 64.5% 65%,transparent 65.5% 96%,rgba(255,255,255,.07) 97%,transparent 98%),repeating-radial-gradient(circle,#101013 0 1px,#19181c 1px 2.2px)}
+.dk-disc-label{position:absolute;inset:32%;border-radius:50%;background-size:cover;background-position:center;box-shadow:0 0 0 2px rgba(0,0,0,.5)}
+.dk-sheen{position:absolute;inset:0;border-radius:50%;pointer-events:none;background:conic-gradient(from 20deg,transparent 0 6%,rgba(255,255,255,.13) 11%,transparent 17% 50%,rgba(255,255,255,.1) 61%,transparent 67%);mix-blend-mode:screen}
+.dk-hole{position:absolute;left:50%;top:50%;width:3.2%;height:3.2%;transform:translate(-50%,-50%);border-radius:50%;background:#d8d3cc}
+
+/* bar and times line up with the sleeve's left edge and the record's right edge (3.9% … 96.2%) */
+.dk-bar{position:relative;margin:18px 3.8% 0 3.9%;height:22px;touch-action:none;cursor:pointer}
+.dk-bar::before{content:"";position:absolute;left:0;right:0;top:50%;height:5px;margin-top:-2.5px;border-radius:5px;background:var(--track)}
+.dk-bar i{position:absolute;left:0;top:50%;height:5px;margin-top:-2.5px;border-radius:5px;background:var(--accent)}
+.dk-bar b{position:absolute;top:50%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:var(--accent)}
+.dk-times{margin-left:3.9%;margin-right:3.8%;display:flex;justify-content:space-between;align-items:center;font:13px/1 var(--ui);color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.dk-ctrls{display:flex;justify-content:center;align-items:center;gap:22px;margin-top:14px;color:var(--muted)}
+.dk-ctrls svg{width:26px;height:26px;fill:currentColor}
+.dk-ctrls .dk-big{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent)}
+.dk-ctrls .dk-big svg{width:30px;height:30px}
+.dk-ctrls button:disabled{opacity:.35}
+
+/* track drum under the record's controls */
+.dk-drum{position:relative;height:var(--h,164px);overflow:hidden;transition:height .45s cubic-bezier(.3,.9,.3,1);margin-top:22px;-webkit-mask-image:linear-gradient(rgba(0,0,0,.35),#000 22%,#000 78%,rgba(0,0,0,.35));mask-image:linear-gradient(rgba(0,0,0,.35),#000 22%,#000 78%,rgba(0,0,0,.35))}
+.dk-drum::before,.dk-drum::after{content:"";position:absolute;left:16px;width:2px;border-radius:1px;background:var(--muted);opacity:.55;transition:opacity .3s}
+.dk-drum::before{top:0;height:calc(var(--above,60px) + 2px);transition:height .45s,opacity .3s}
+.dk-drum::after{top:calc(var(--above,60px) + 42px);bottom:0;transition:top .45s,opacity .3s}
+.dk-drum.first::before,.dk-drum.last::after{opacity:0}
+.dk-drum ol{list-style:none;margin:0;padding:0;transition:transform .45s cubic-bezier(.3,.9,.3,1)}
+.dk-drum button{display:flex;align-items:center;width:100%;height:30px;padding:0 4px 0 34px;text-align:left;color:var(--muted);font-size:14.5px;transition:color .3s}
+.dk-drum .nm{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dk-drum button.on{height:44px;padding-left:0;color:var(--text)}
+.dk-drum .num{flex:none;width:34px;text-align:center;font-weight:700;font-size:20px;color:var(--accent)}
+.dk-drum .on .nm{font-weight:700;font-size:19px}
+
+/* ---------- the rest of the collection ---------- */
+.dk-strip{margin:24px -16px 0;display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;padding:10px 16px 14px;scrollbar-width:none;align-items:flex-start;min-height:20px}
+.dk-strip::-webkit-scrollbar{display:none}
+.dk-strip > button{flex:none;scroll-snap-align:start;scroll-margin-left:16px;display:block;text-align:left}
+.dk-case{display:block;position:relative;width:132px;aspect-ratio:109/70;border-radius:4px;
+  background:linear-gradient(160deg,rgba(255,255,255,.3),rgba(255,255,255,.08) 55%,rgba(255,255,255,.18)),color-mix(in oklab,var(--shell1) 28%,rgba(120,120,130,.25));
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),inset 0 0 0 2.5px rgba(0,0,0,.16),inset 0 -3px 0 rgba(255,255,255,.18),0 3px 0 -.5px color-mix(in oklab,var(--shell2) 70%,#000 30%),0 16px 20px -10px rgba(0,0,0,.6)}
+.dk-case::after{content:"";position:absolute;inset:0;border-radius:4px;pointer-events:none;z-index:3;background:linear-gradient(115deg,rgba(255,255,255,.32),transparent 28%,transparent 60%,rgba(255,255,255,.14) 68%,transparent 76%),linear-gradient(rgba(255,255,255,.18),transparent 6px)}
+.dk-flap{position:absolute;left:0;right:0;top:0;height:23%;border-radius:4px 4px 1px 1px;background-size:cover;background-position:center;z-index:2;transform-origin:50% 0;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.45),0 3px 5px -1px rgba(0,0,0,.45)}
+.dk-flap::before,.dk-flap::after{content:"";position:absolute;bottom:-3px;width:11px;height:6px;border-radius:3px;background:linear-gradient(#f2f0ec,#9a968f);box-shadow:0 1px 1px rgba(0,0,0,.4)}
+.dk-flap::before{left:5px}.dk-flap::after{right:5px}
+.dk-sheet{position:absolute;left:6px;right:6px;top:calc(23% + 4px);bottom:7px;border-radius:1px;display:flex;align-items:flex-start;padding:0 8px;overflow:hidden;
+  background:linear-gradient(90deg,rgba(0,0,0,.14) 0 1.5px,rgba(255,255,255,.4) 1.5px 3px,transparent 6px),linear-gradient(170deg,#f8f4e8,#ece5d3);
+  box-shadow:0 1px 2px rgba(0,0,0,.25),inset 0 7px 6px -5px rgba(0,0,0,.35)}
+.dk-sheet::before,.dk-sheet::after{content:"";position:absolute;bottom:-1px;width:9px;height:6px;background:rgba(255,255,255,.55);clip-path:polygon(0 100%,100% 100%,50% 0);z-index:1}
+.dk-sheet::before{left:12%}.dk-sheet::after{right:12%}
+.dk-lines{position:absolute;inset:0;background:linear-gradient(#c8463c,#c8463c) 0 9px/100% 1.5px no-repeat,repeating-linear-gradient(180deg,transparent 0 18px,rgba(60,60,80,.28) 18px 19px) 0 6px/100% calc(100% - 6px) no-repeat}
+.dk-lines::before{content:"A";position:absolute;right:5px;top:-1px;font:700 9px/1 var(--ui);color:#c8463c}
+.dk-jt{position:relative;min-width:0;color:#1d2333;margin-top:14px;font:700 18px/19px 'Caveat',cursive;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.dk-sleeve{display:block;width:136px;aspect-ratio:1;border-radius:3px;background-size:cover;background-position:center;box-shadow:0 14px 20px -12px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.12)}
+
+@media (prefers-reduced-motion: reduce){ .dk-slot,.dk-door,.dk-key,.dk-record{transition-duration:.01ms!important} }
