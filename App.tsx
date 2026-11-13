@@ -3,9 +3,10 @@ import { useLibrary } from "./hooks/useLibrary";
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { motion } from 'motion/react';
 import LibrarySidebar from './components/LibrarySidebar';
+import PlayerControls from './components/PlayerControls';
 import { AudioDeck } from './components/AudioDeck';
 import { deckKeyOf } from './utils/deckArt';
-import { assignPlayerKinds, expectNewAudiobooks, playerKindOf } from './utils/playerMode';
+import { assignPlayerKinds, expectNewAudiobooks, deckKindOf, isInCollection, savedPlayerMode, savePlayerMode, forgetPlayerKind } from './utils/playerMode';
 import ChapterSidebar from './components/ChapterSidebar';
 import EBookControls from './components/EBookControls';
 import { Book, PersistedState, AppMode, Chapter } from './types';
@@ -883,11 +884,33 @@ function App() {
 
   // --- Render ---
   const activeBooks = books.filter(b => !deletedBookIds.includes(b.id));
-  // Player mode: every audiobook plays as a cassette or a record, chosen when it was added
+  // Player mode: tapes and albums ("add tape" / "add album") form the collection, apart from the library
+  const [isPlayerMode, setIsPlayerMode] = useState(savedPlayerMode);
   const [, setKindsVersion] = useState(0);
-  useEffect(() => { if (assignPlayerKinds(books)) setKindsVersion(v => v + 1); }, [books]);
-  // The library shows the books of the current mode: audiobooks are the player's collection
-  const inMode = (b: Book) => (mode === 'audio') === (b.type === 'audio');
+  const knownIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (knownIds.current && assignPlayerKinds(books, knownIds.current)) setKindsVersion(v => v + 1);
+    if (isLibraryReady) knownIds.current = new Set(books.map(b => b.id));
+  }, [books, isLibraryReady]);
+  const inMode = (b: Book) => isInCollection(b) === isPlayerMode;
+  const deckKind = currentBook && mode === 'audio' ? deckKindOf(currentBook.id) : null;
+  // Tapes and albums play at their own speed; the speed choice stays with the standard player
+  useEffect(() => { if (deckKind && playbackRate !== 1) setPlaybackRate(1); }, [deckKind, playbackRate]);
+
+  /** Library ⇄ collection: opens the last book listened to on the other side and shows its list */
+  const switchCollection = async () => {
+    const next = !isPlayerMode;
+    if (currentBook) { if (mode === 'audio') setIsPlaying(false); await saveState(true); }
+    setIsPlayerMode(next); savePlayerMode(next);
+    setTitleClickKey(k => k + 1);
+    setIsCatalogOpen(false);
+    const pool = activeBooks.filter(b => !b.missing && isInCollection(b) === next);
+    const last = (b: Book) => bookProgressMap[b.id]?.lastUpdated || 0;
+    const best = pool.reduce<Book | null>((a, b) => (!a || last(b) > last(a) ? b : a), null);
+    if (best) handleSelectBook(best);
+    else { setCurrentBook(null); setMode(next ? 'audio' : 'ebook'); }
+    setTimeout(() => setIsSidebarOpen(true), 60);
+  };
 
   // A grey book: a catalog book downloads again, any other asks for its file
   const openMissingBook = (book: Book) => {
@@ -1069,10 +1092,11 @@ function App() {
         onAppStyleChange={handleAppStyleChange}
         currentBookFormat={currentBook?.format || null}
         // Close the library so the newly added book is visible once it opens
-        onExternalFilePicked={(files) => { setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFilePicked(files); }}
+        onExternalFilePicked={(files) => { if (!isPlayerMode) expectNewAudiobooks(null); setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFilePicked(files); }}
         onExternalFolderPicked={(files) => { setIsSidebarOpen(false); setIsCatalogOpen(false); return handleExternalFolderPicked(files); }}
         onDeleteBook={(id) => {
           if (missingShelf.some(b => b.id === id)) { forgetMissingBook(id); deleteBookHistory(id); return; }
+          forgetPlayerKind(id);
           return handleDeleteBook(id);
         }}
         mode={mode}
@@ -1085,11 +1109,8 @@ function App() {
           setIsCatalogOpen(true);
           setIsSidebarOpen(false);
         }}
-        onSwitchPlayerMode={() => {
-          setTitleClickKey(k => k + 1);
-          setIsCatalogOpen(false);
-          switchMode();
-        }}
+        isPlayerMode={isPlayerMode}
+        onSwitchPlayerMode={switchCollection}
         onAddAudio={(kind) => expectNewAudiobooks(kind)}
       />
 
@@ -1120,6 +1141,7 @@ function App() {
             bookId={currentBook.id}
             appStyle={appStyle}
             isAudio={mode === 'audio'}
+            isTracks={!!deckKind}
             onSelectChapter={(i) => { 
                 setNavStack(prev => [...prev, { chapterIndex: currentChapterIndex, progress: readerProgress }]);
                 if (mode === 'audio') {
@@ -1184,10 +1206,12 @@ function App() {
                 setLibraryClickKey(k => k + 1);
                 toggleLibrary();
             }}
+            isPlayerMode={isPlayerMode}
             onSwitchMode={() => {
                 setTitleClickKey(k => k + 1);
                 setIsCatalogOpen(false);
-                switchMode();
+                // In the player the title is just a title; in the library it switches audio ⇄ text as before
+                if (!isPlayerMode) switchMode(b => !isInCollection(b));
             }}
             onToggleChapters={() => {
                 setChaptersClickKey(k => k + 1);
@@ -1267,14 +1291,13 @@ function App() {
                 onOpenCatalog={() => setIsCatalogOpen(true)}
              />
           ) : (
-            mode === 'audio' ? (
+            mode === 'audio' && deckKind ? (
                 // Player mode: the cassette deck or the record, with the rest of the collection under it
                 <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-24 pb-6 flex flex-col justify-center">
                     <AudioDeck
                         book={currentBook}
-                        others={activeBooks.filter(b => b.type === 'audio' && b.id !== currentBook.id && !b.missing)}
-                        kind={playerKindOf(currentBook.id)}
-                        kindOf={(b) => playerKindOf(b.id)}
+                        others={activeBooks.filter(b => b.id !== currentBook.id && !b.missing && b.type === 'audio' && deckKindOf(b.id) === deckKind)}
+                        kind={deckKind}
                         deckKey={deckKeyOf(appStyle, styleName)}
                         isPlaying={isPlaying}
                         setIsPlaying={setIsPlaying}
@@ -1292,10 +1315,124 @@ function App() {
                             if (currentChapterIndex < currentBook.chapters.length - 1) setCurrentChapterIndex(p => p + 1);
                         }}
                         onSelectChapter={(i) => { if (i !== currentChapterIndex) { setCurrentTime(0); setCurrentChapterIndex(i); } }}
-                        playbackRate={playbackRate}
-                        onRateChange={setPlaybackRate}
                         onSelectBook={(b) => handleSelectBook(b)}
                     />
+                </div>
+            ) : mode === 'audio' ? (
+                // Audio Player needs padding to not be hidden by header
+                <div className="flex-1 flex flex-col items-center justify-center p-4 pt-20 pb-4 md:pb-8 w-full min-h-0 overflow-hidden">
+                    <div className="w-full flex-1 flex flex-col items-center justify-center gap-4 md:gap-8 min-h-0">
+                        <div className="relative w-full flex-1 flex items-center justify-center min-h-0 h-0 shrink overflow-hidden">
+                            <div 
+                                onClick={togglePlay} 
+                                className={`h-full aspect-square max-w-full flex items-center justify-center relative overflow-hidden cursor-pointer active:scale-95 transition-transform rounded-2xl md:rounded-3xl shadow-xl ${
+                                    currentBook.coverUrl ? 'bg-[#2c2a28]' : '' 
+                                }`}
+                            >
+                                {currentBook.coverUrl ? (
+                                    <img src={currentBook.coverUrl} className="w-full h-full object-cover" alt="Cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        <span className="text-[5rem] md:text-[7rem] leading-none select-none opacity-80 emoji" style={{ fontSize: '5rem' }}>
+                                            {variantOf(styleName)?.audioEmoji ?? (isMarcel ? '☕' : isBimbo ? '💿' : isSurf ? '🏄' : '💽')}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {isAudioLoading && (
+                                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-20 transition-opacity">
+                                        <div className={`w-12 h-12 border-4 rounded-full animate-spin ${
+                                            isBimbo ? 'border-pink-200 border-t-pink-600' : 
+                                            isSurf ? 'border-sky-200 border-t-sky-600' : 
+                                            isMarcel ? 'border-[#C4B5E6] border-t-[#766594]' :
+                                            'border-[#fffff0]/20 border-t-[#fffff0]'
+                                        }`}></div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="space-y-1 w-full max-w-2xl text-center shrink-0 px-2">
+                            <h2 className={`text-lg md:text-2xl font-bold font-literata leading-snug line-clamp-2 ${isMarcel ? 'text-[#2F2440]' : isBimbo ? 'text-[#BE123C]' : isSurf ? 'text-[#0C4A6E]' : 'text-[#fffff0]'}`}>{currentBook.title}</h2>
+                            {currentBook.author && <p className={`text-sm md:text-base italic ${isMarcel ? 'text-[#766594]' : isBimbo ? 'text-[#BE123C]/70' : isSurf ? 'text-[#0369A1]' : 'text-[#888]'}`}>{currentBook.author}</p>}
+                            <p className={`text-xs line-clamp-1 mt-1 ${isMarcel ? 'text-[#9B8EAE]' : isBimbo ? 'text-[#BE123C]/50' : isSurf ? 'text-[#0EA5E9]' : 'text-[#666]'}`}>{currentBook.chapters[currentChapterIndex]?.name}</p>
+                        </div>
+                        <div className="w-full max-w-2xl shrink-0 pb-2 md:pb-6">
+                            <PlayerControls 
+                                isPlaying={isPlaying}
+                                onTogglePlay={togglePlay}
+                                onNext={() => { 
+                                    if (currentBook && currentChapterIndex < currentBook.chapters.length - 1) { 
+                                        setCurrentChapterIndex(p=>p+1); 
+                                    } 
+                                }}
+                                onPrev={() => { 
+                                    if (!currentBook) return;
+                                    if (currentTime > 5) { 
+                                        seekAudio(0);
+                                    } else if (currentChapterIndex > 0) { 
+                                        setCurrentChapterIndex(p=>p-1); 
+                                    } 
+                                }}
+                                playbackRate={playbackRate}
+                                onRateChange={setPlaybackRate}
+                                currentTime={currentTime}
+                                duration={duration}
+                                onSeek={seekInBook}
+                                totalProgress={calculateTotalProgress(
+                                    currentChapterIndex,
+                                    currentBook.chapters,
+                                    currentTime,
+                                    duration
+                                )}
+                                currentBook={currentBook}
+                                currentChapterIndex={currentChapterIndex}
+                                appStyle={appStyle}
+                                globalCurrentTime={currentBook.chapters.some(ch => ch.startTime !== undefined && ch.startTime > 0) ? currentTime : ((currentBook.chapters[currentChapterIndex]?.startTime || 0) + currentTime)}
+                                globalDuration={(() => {
+                                    const isEmb = currentBook.chapters.some(ch => ch.startTime !== undefined && ch.startTime > 0);
+                                    if (isEmb) {
+                                        return audioRef.current?.duration || currentBook.chapters[currentBook.chapters.length - 1]?.endTime || duration;
+                                    }
+                                    return currentBook.chapters.reduce((acc, ch, idx) => {
+                                        let d = ch.duration || 0;
+                                        if (idx === currentChapterIndex && duration > 0) d = Math.max(d, duration);
+                                        return acc + (d > 0 ? d : (duration > 0 ? duration : 1800));
+                                    }, 0);
+                                })()}
+                                onGlobalSeek={(targetGlobalTime) => {
+                                    const isEmbeddedCh = currentBook.chapters.some(ch => ch.startTime !== undefined);
+                                    
+                                    const matchedIndex = currentBook.chapters.findIndex(ch => {
+                                        const start = ch.startTime || 0;
+                                        const end = ch.endTime || (start + (ch.duration || 0));
+                                        return targetGlobalTime >= start && targetGlobalTime <= end;
+                                    });
+                                    
+                                    if (matchedIndex !== -1) {
+                                        const matchedChapter = currentBook.chapters[matchedIndex];
+                                        setCurrentChapterIndex(matchedIndex);
+                                        
+                                        if (isEmbeddedCh) {
+                                            audioRef.current.currentTime = targetGlobalTime;
+                                            setCurrentTime(targetGlobalTime);
+                                        } else {
+                                            const localSeek = targetGlobalTime - (matchedChapter.startTime || 0);
+                                            setCurrentTime(localSeek);
+                                            if (currentChapterIndex === matchedIndex) {
+                                                audioRef.current.currentTime = localSeek;
+                                            } else {
+                                                const onMetadata = () => {
+                                                    audioRef.current.currentTime = localSeek;
+                                                    audioRef.current.removeEventListener('loadedmetadata', onMetadata);
+                                                };
+                                                audioRef.current.addEventListener('loadedmetadata', onMetadata);
+                                            }
+                                        }
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
                 </div>
             ) : (
                 <>

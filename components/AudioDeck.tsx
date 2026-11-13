@@ -4,6 +4,7 @@ import { Book } from '../types';
 import { DeckKey, DECK_VARS, lidArt, flapArt, keyFace, generatedCover } from '../utils/deckArt';
 import { PlayerKind } from '../utils/playerMode';
 import { formatTime } from '../utils/time';
+import { deckSounds } from '../utils/deckSounds';
 import './audioDeck.css';
 
 interface AudioDeckProps {
@@ -11,8 +12,6 @@ interface AudioDeckProps {
   /** The rest of the collection, shown in the strip under the player */
   others: Book[];
   kind: PlayerKind;
-  /** How each book in the strip plays: a box for a cassette, a sleeve for an album */
-  kindOf: (b: Book) => PlayerKind;
   deckKey: DeckKey;
   isPlaying: boolean;
   setIsPlaying: (v: boolean) => void;
@@ -29,12 +28,9 @@ interface AudioDeckProps {
   onNextChapter: () => void;
   /** A track picked on the record's drum */
   onSelectChapter: (i: number) => void;
-  playbackRate: number;
-  onRateChange: (r: number) => void;
   onSelectBook: (b: Book) => void;
 }
 
-const RATES = [0.8, 1, 1.25, 1.5, 1.75, 2];
 const ICON = {
   play: <svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" /></svg>,
   pause: <svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z" /></svg>,
@@ -78,7 +74,7 @@ function Drum({ names, current, onPick }: { names: string[]; current: number; on
 }
 
 export function AudioDeck(props: AudioDeckProps) {
-  const { book, others, kind, deckKey, isPlaying, setIsPlaying, currentTime, duration, totalProgress, onSeek, playbackRate, onRateChange } = props;
+  const { book, others, kind, deckKey, isPlaying, setIsPlaying, currentTime, duration, totalProgress, onSeek } = props;
   const vars = DECK_VARS[deckKey] as React.CSSProperties;
 
   // Live values for the animation loop and the held keys, without re-creating them each render
@@ -96,12 +92,14 @@ export function AudioDeck(props: AudioDeckProps) {
 
   const insert = async () => {
     if (busy.current) return; busy.current = true;
+    deckSounds.insert();
     setDoorOpen(true); await wait(220); setBay('in'); await wait(720); setDoorOpen(false); await wait(380);
     busy.current = false;
   };
   const eject = async () => {
     if (busy.current) return; busy.current = true;
     setIsPlaying(false); live.current.wind = 0;
+    deckSounds.eject();
     setDoorOpen(true); await wait(300); setBay('out'); await wait(650);
     busy.current = false;
   };
@@ -144,17 +142,20 @@ export function AudioDeck(props: AudioDeckProps) {
   const totalRef = useRef(totalProgress); totalRef.current = totalProgress;
 
   // ----- keys -----
-  const play = () => { if (bay === 'in') setIsPlaying(true); else if (bay === 'out') insert().then(() => setIsPlaying(true)); };
-  const stop = () => { if (isPlaying) setIsPlaying(false); else if (bay === 'in') eject(); };
+  const play = () => {
+    if (bay === 'in') { if (isPlaying) deckSounds.keyDown(); else deckSounds.latch(); setIsPlaying(true); }
+    else if (bay === 'out') { deckSounds.keyDown(); insert().then(() => { deckSounds.latch(); setIsPlaying(true); }); }
+  };
+  const stop = () => { deckSounds.keyDown(); if (isPlaying) setIsPlaying(false); else if (bay === 'in') eject(); };
   // REW / FF: a tap jumps 15 s, holding winds faster and faster
   const [held, setHeld] = useState<number>(0);
-  const holdRef = useRef<{ timer?: number; tick?: number; step: number; wound: boolean }>({ step: 5, wound: false });
+  const holdRef = useRef<{ timer?: number; tick?: number; step: number; wound: boolean; hush?: () => void }>({ step: 5, wound: false });
   const startWind = (dir: number) => {
     if (bay !== 'in') return;
-    setHeld(dir);
+    setHeld(dir); deckSounds.keyDown();
     const h = holdRef.current; h.wound = false; h.step = 5;
     h.timer = window.setTimeout(() => {
-      h.wound = true; live.current.wind = dir;
+      h.wound = true; live.current.wind = dir; h.hush = deckSounds.wind();
       h.tick = window.setInterval(() => {
         onSeekRef.current(live.current.currentTime + dir * h.step);
         live.current.currentTime += dir * h.step;
@@ -165,14 +166,13 @@ export function AudioDeck(props: AudioDeckProps) {
   const endWind = (dir: number) => {
     const h = holdRef.current;
     if (h.timer) clearTimeout(h.timer); if (h.tick) clearInterval(h.tick); h.timer = h.tick = undefined;
+    h.hush?.(); h.hush = undefined; if (held === dir) deckSounds.keyUp();
     if (held === dir && !h.wound && bay === 'in') onSeekRef.current(live.current.currentTime + dir * 15);
     live.current.wind = 0; h.wound = false; setHeld(0);
   };
   const onSeekRef = useRef(onSeek); onSeekRef.current = onSeek;
-  useEffect(() => () => { const h = holdRef.current; if (h.timer) clearTimeout(h.timer); if (h.tick) clearInterval(h.tick); }, []);
+  useEffect(() => () => { const h = holdRef.current; if (h.timer) clearTimeout(h.timer); if (h.tick) clearInterval(h.tick); h.hush?.(); }, []);
 
-  const nextRate = () => onRateChange(RATES[(RATES.indexOf(playbackRate) + 1) % RATES.length] ?? 1);
-  const rateLabel = `${playbackRate}×`;
 
   // ----- swapping books from the strip -----
   const choose = async (b: Book) => {
@@ -180,6 +180,7 @@ export function AudioDeck(props: AudioDeckProps) {
     setPicked(b.id);
     if (kind === 'tape') {
       busy.current = true; setIsPlaying(false); live.current.wind = 0;
+      deckSounds.eject();
       setDoorOpen(true); await wait(280); setBay('away'); await wait(520);
       busy.current = false;
     } else {
@@ -232,7 +233,6 @@ export function AudioDeck(props: AudioDeckProps) {
               <div className="dk-door-glass" /><div className="dk-door-sheen" />
             </div>
           </div>
-          <button type="button" className="dk-rate" onClick={nextRate} aria-label="Скорость">{rateLabel}</button>
           <div className="dk-keys">
             {([['rew', -1], ['play', 0], ['stop', 0], ['ff', 1]] as const).map(([k, dir]) => {
               const latched = k === 'play' && isPlaying;
@@ -270,7 +270,6 @@ export function AudioDeck(props: AudioDeckProps) {
           </div>
           <div className="dk-times">
             <span>{formatTime(currentTime)}</span>
-            <button type="button" className="dk-rate2" onClick={nextRate} aria-label="Скорость">{rateLabel}</button>
             <span>{formatTime(duration)}</span>
           </div>
           <div className="dk-ctrls">
@@ -292,7 +291,7 @@ export function AudioDeck(props: AudioDeckProps) {
               layout
               key={b.id}
               type="button"
-              aria-label={props.kindOf(b) === 'tape' ? `Вставить «${b.title}»` : `Поставить «${b.title}»`}
+              aria-label={kind === 'tape' ? `Вставить «${b.title}»` : `Поставить «${b.title}»`}
               onClick={() => choose(b)}
               initial={{ opacity: 0, y: -40, scale: 0.9 }}
               animate={picked === b.id ? { opacity: 1, y: -16, scale: 1.04, rotate: -3 } : { opacity: 1, y: 0, scale: 1, rotate: 0 }}
@@ -300,7 +299,7 @@ export function AudioDeck(props: AudioDeckProps) {
               whileTap={{ y: -6 }}
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
             >
-              {props.kindOf(b) === 'tape' ? (
+              {kind === 'tape' ? (
                 <span className="dk-case">
                   <motion.span className="dk-flap" style={bg(flapArt(deckKey))} animate={{ rotateX: picked === b.id ? 55 : 0 }} transition={{ duration: 0.3 }} />
                   <span className="dk-sheet"><span className="dk-lines" /><span className="dk-jt">{b.title}</span></span>

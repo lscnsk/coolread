@@ -19,6 +19,8 @@ interface AppHeaderProps {
   onSwitchMode: () => void;
   onToggleChapters: () => void;
   isCatalogView?: boolean;
+  /** In the player (tapes and albums): "…Tape" and the player's buttons */
+  isPlayerMode?: boolean;
   onToggleCatalogFilter?: () => void;
   onBackFromCatalog?: () => void;
 }
@@ -36,6 +38,7 @@ export function AppHeader({
   onSwitchMode,
   onToggleChapters,
   isCatalogView = false,
+  isPlayerMode = false,
   onToggleCatalogFilter,
   onBackFromCatalog
 }: AppHeaderProps) {
@@ -46,7 +49,7 @@ export function AppHeader({
   const isMarcel = appStyle === 'Marcel';
   const v = variantOf(styleName);
   // Player mode: "…Tape" instead of "…Read", and the collection / tracks buttons of the style
-  const player = mode === 'audio' ? PLAYER_EMOJI[deckKeyOf(appStyle, styleName)] : null;
+  const player = isPlayerMode ? PLAYER_EMOJI[deckKeyOf(appStyle, styleName)] : null;
   const word = player ? 'Tape' : 'Read';
 
   return (

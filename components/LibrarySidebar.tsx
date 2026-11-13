@@ -8,7 +8,7 @@ import { SmartCoverImage } from './SmartCoverImage';
 import { addToHomeScreen, watchHomeScreen, offerFullVersion, RUSTORE_URL, APK_URL } from '../utils/telegram';
 import { openSite } from '../utils/webBrowser';
 import { deckKeyOf, generatedCover } from '../utils/deckArt';
-import { PLAYER_EMOJI, BOOKS_EMOJI, PLAYER_SWITCH_EMOJI, PlayerKind } from '../utils/playerMode';
+import { PLAYER_EMOJI, PlayerKind } from '../utils/playerMode';
 
 interface LibrarySidebarProps {
   books: Book[];
@@ -33,7 +33,9 @@ interface LibrarySidebarProps {
   onDeleteCustomFont?: (name: string) => void;
   onOpenCatalog?: () => void;
   catalogNames?: string;
-  /** Books ⇄ player: the 🎧 button in the library, the book button in the collection */
+  /** The player's collection of tapes and albums is shown instead of the library */
+  isPlayerMode?: boolean;
+  /** Library ⇄ collection: the button pinned to the bottom of the panel */
   onSwitchPlayerMode?: () => void;
   /** Called before the file picker opens for "add tape" / "add album" */
   onAddAudio?: (kind: PlayerKind) => void;
@@ -76,6 +78,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   onDeleteCustomFont,
   onOpenCatalog,
   catalogNames,
+  isPlayerMode = false,
   onSwitchPlayerMode,
   onAddAudio
 }) => {
@@ -119,7 +122,6 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   }, [customFonts]);
   const bookInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
-  const isPlayerMode = mode === 'audio';
   const folderInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -423,16 +425,6 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         <div className="flex items-center gap-0 shrink-0">
           {view === 'library' && !isSearchMode && (
             <>
-              {onSwitchPlayerMode && (
-                <button
-                  onClick={onSwitchPlayerMode}
-                  className="text-[#888] hover:text-[#fffff0] p-0.5 hover:scale-110 transition-transform shrink-0"
-                  title={isPlayerMode ? 'Books' : 'Player'}
-                  aria-label={isPlayerMode ? 'Книги' : 'Плеер аудиокниг'}
-                >
-                  <span className="text-2xl leading-none emoji">{isPlayerMode ? BOOKS_EMOJI : PLAYER_SWITCH_EMOJI}</span>
-                </button>
-              )}
               <button 
                 onClick={() => { setView('settings'); setIsSearchMode(false); setSearchQuery(''); }} 
                 className="text-[#888] hover:text-[#fffff0] p-0.5 hover:scale-110 transition-transform shrink-0"
@@ -860,7 +852,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
 
              {/* Add Book Buttons Area */}
             {!isSearchMode && !searchQuery && (
-              <div className="mt-2 pb-12 space-y-2">
+              <div className="mt-2 pb-3 space-y-2">
                  {/* Player mode: a cassette or an album, the player plays it as one */}
                  {isPlayerMode && ([['tape', '📼', 'Add tape', 'plays as a cassette · mp3, m4b, m4a'], ['vinyl', '💿', 'Add album', 'plays as a record · mp3, m4b, m4a']] as const).map(([kind, emoji, title, hint]) => (
                    <button
@@ -1111,6 +1103,27 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           </>
         ) : null}
       </div>
+      {/* Reader ⇄ player: always at the bottom of the library; the list scrolls under it */}
+      {view === 'library' && onSwitchPlayerMode && (
+        <div className="shrink-0 p-3 pt-2 border-t border-[#45413e]">
+          <button onClick={onSwitchPlayerMode} className={`w-full h-[52px] shrink-0 px-3 border-2 rounded transition-all flex items-center justify-center gap-2 group mb-1 mt-1 ${
+                            isMarcel
+                              ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]'
+                              : isBimbo
+                              ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]'
+                              : isSurf
+                              ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]'
+                              : isDragon
+                              ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                              : isFF
+                              ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                              : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]'
+                          }`}>
+            <span className="text-xl leading-none emoji group-hover:scale-110 transition-transform">{isPlayerMode ? '📖' : '🎧'}</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isPlayerMode ? 'Switch to reader' : 'Switch to player'}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

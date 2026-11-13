@@ -153,7 +153,8 @@ export function useLibrary({
   };
 
   // --- Mode Switching ---
-  const switchMode = async () => {
+  /** Audio ⇄ text; `canOpen` limits which books it may open (the player's tapes and albums are left out) */
+  const switchMode = async (canOpen: (b: Book) => boolean = () => true) => {
     let latestState: PersistedState | null = null;
     if (currentBook) {
         if (mode === 'audio') setIsPlaying(false);
@@ -172,7 +173,7 @@ export function useLibrary({
 
     (Object.values(effectiveMap) as PersistedState[]).forEach(state => {
         const matchingBook = books.find(b => b.id === state.bookId);
-        if (matchingBook && matchingBook.type === newMode) {
+        if (matchingBook && matchingBook.type === newMode && canOpen(matchingBook)) {
             if (state.lastUpdated > maxTime) {
                 maxTime = state.lastUpdated;
                 bestBookId = state.bookId;
