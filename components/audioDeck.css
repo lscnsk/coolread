@@ -63,11 +63,12 @@
 .dk-sheen{position:absolute;inset:0;border-radius:50%;pointer-events:none;background:conic-gradient(from 20deg,transparent 0 6%,rgba(255,255,255,.13) 11%,transparent 17% 50%,rgba(255,255,255,.1) 61%,transparent 67%);mix-blend-mode:screen}
 .dk-hole{position:absolute;left:50%;top:50%;width:3.2%;height:3.2%;transform:translate(-50%,-50%);border-radius:50%;background:#d8d3cc}
 
-.dk-bar{position:relative;margin-top:18px;height:22px;touch-action:none;cursor:pointer}
+/* bar and times line up with the sleeve's left edge and the record's right edge (3.9% … 96.2%) */
+.dk-bar{position:relative;margin:18px 3.8% 0 3.9%;height:22px;touch-action:none;cursor:pointer}
 .dk-bar::before{content:"";position:absolute;left:0;right:0;top:50%;height:5px;margin-top:-2.5px;border-radius:5px;background:var(--track)}
 .dk-bar i{position:absolute;left:0;top:50%;height:5px;margin-top:-2.5px;border-radius:5px;background:var(--accent)}
 .dk-bar b{position:absolute;top:50%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:var(--accent)}
-.dk-times{display:flex;justify-content:space-between;align-items:center;font:13px/1 var(--ui);color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.dk-times{margin-left:3.9%;margin-right:3.8%;display:flex;justify-content:space-between;align-items:center;font:13px/1 var(--ui);color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
 .dk-ctrls{display:flex;justify-content:center;align-items:center;gap:22px;margin-top:14px;color:var(--muted)}
 .dk-ctrls svg{width:26px;height:26px;fill:currentColor}
 .dk-ctrls .dk-big{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent)}
