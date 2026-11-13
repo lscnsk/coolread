@@ -7,7 +7,7 @@ import { PRESET_FONTS, getFontFamilyCSS } from '../utils/fonts';
 import { SmartCoverImage } from './SmartCoverImage';
 import { addToHomeScreen, watchHomeScreen, offerFullVersion, RUSTORE_URL, APK_URL } from '../utils/telegram';
 import { openSite } from '../utils/webBrowser';
-import { deckSkin, onDeckSkinChange, uploadDeckSkin, removeDeckSkin, saveDeckSkinTemplate } from '../utils/deckSkin';
+import { DeckSkin, listDeckSkins, activeDeckSkinId, setActiveDeckSkin, deleteDeckSkin, deckSkinUrl, onDeckSkinChange, uploadDeckSkin, saveDeckSkinTemplate } from '../utils/deckSkin';
 import { deckKeyOf, generatedCover } from '../utils/deckArt';
 import { PLAYER_EMOJI, PlayerKind } from '../utils/playerMode';
 
@@ -219,9 +219,16 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   const chosen = styleName ?? appStyle;
   // The deck skin (player mode settings)
   const skinInputRef = useRef<HTMLInputElement>(null);
-  const [skinOn, setSkinOn] = useState(() => !!deckSkin());
+  const [skins, setSkins] = useState<DeckSkin[]>([]);
+  const [skinOnId, setSkinOnId] = useState<string | null>(activeDeckSkinId);
   const [skinNote, setSkinNote] = useState('');
-  useEffect(() => onDeckSkinChange(() => setSkinOn(!!deckSkin())), []);
+  useEffect(() => {
+    let live = true;
+    const load = () => { setSkinOnId(activeDeckSkinId()); listDeckSkins().then(l => { if (live) setSkins(l); }); };
+    load();
+    const off = onDeckSkinChange(load);
+    return () => { live = false; off(); };
+  }, []);
   const skinTone = isMarcel 
                        ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]' 
                        : isBimbo 
@@ -234,6 +241,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                        ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
                        : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]';
 
+  const skinOnTone = isMarcel ? 'bg-[#E8E0F5] border-[#AC97D7] text-[#2F2440]' : isBimbo ? 'bg-[#FFF0F5] border-[#F472B6] text-[#BE123C]' : isSurf ? 'bg-sky-50 border-[#7dd3fc] text-[#0c4a6e]' : isDragon ? 'bg-[#4a2511] border-[#b45309] text-[#fcd34d]' : isFF ? 'bg-[#17335e] border-[#dfc894] text-[#f0deba]' : 'bg-[#45413e] border-[#888] text-[#fffff0]';
+  const skinIdleTone = isMarcel ? 'border-transparent text-[#544372] hover:bg-[#E8E0F5]/50' : isBimbo ? 'border-transparent text-[#BE123C]/80 hover:bg-white/40' : isSurf ? 'border-transparent text-[#0284c7] hover:bg-white/40' : isDragon ? 'border-transparent text-[#fcd34d]/80 hover:bg-[#3a1a0e]' : isFF ? 'border-transparent text-[#f0deba]/80 hover:bg-[#0d2347]' : 'border-transparent text-[#aaa] hover:bg-[#363330] hover:text-[#fff]';
   // Unselected style buttons in Settings: a quiet border in the current style's colors
   const styleBtnIdle = (name: string) => `${
     isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isMarcel ? 'border-[#DBD0EF]' : isDragon ? 'border-[#4a2511]' : isFF ? 'border-[#17335e]' : 'border-[#363330]'
@@ -578,30 +587,46 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                         <span className="text-xl group-hover:scale-110 transition-transform emoji">🎨</span>
                         <div className="flex flex-col min-w-0 flex-1 justify-center">
                           <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">Upload customization</span>
-                          <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">{skinOn ? 'your skin is on' : 'png or jpg'}</span>
+                          <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">png, jpg, webp</span>
                         </div>
                       </button>
                       <button
                         onClick={() => { saveDeckSkinTemplate(deckKeyOf(appStyle, styleName)).then(where => setSkinNote(`Template saved: ${where}`), e => setSkinNote(`Could not save: ${e?.message || e}`)); }}
-                        className={`w-[60px] shrink-0 border-2 border-dashed border-l-0 ${skinOn ? '' : 'rounded-r'} transition-all flex flex-col items-center justify-center gap-0.5 ${skinTone}`}
+                        className={`w-[64px] shrink-0 border-2 border-dashed border-l-0 rounded-r transition-all flex flex-col items-center justify-center gap-0.5 ${skinTone}`}
                         title="Download the template"
                         aria-label="Download the template"
                       >
                         <span className="text-xl emoji leading-none">⬇️</span>
                         <span className="text-[8.5px] font-bold uppercase tracking-wider opacity-80">template</span>
                       </button>
-                      {skinOn && (
-                        <button
-                          onClick={() => { removeDeckSkin(); setSkinNote('The deck has its own door again'); }}
-                          className={`w-[40px] shrink-0 border-2 border-dashed border-l-0 rounded-r transition-all flex items-center justify-center ${skinTone}`}
-                          title="Remove the customization"
-                          aria-label="Remove the customization"
-                        >
-                          <span className="text-lg emoji leading-none">✖️</span>
-                        </button>
-                      )}
                     </div>
                     {skinNote && <div className="text-[10px] opacity-70 font-mono px-1 break-all">{skinNote}</div>}
+                    {/* The skins added so far: tap one to put it on the deck (or take it off), 🗑️ deletes it */}
+                    {skins.length > 0 && (
+                      <div className="flex flex-col gap-1.5 pt-0.5">
+                        {skins.map(sk => {
+                          const on = sk.id === skinOnId;
+                          return (
+                            <div key={sk.id}
+                              onClick={() => { setActiveDeckSkin(on ? null : sk.id); setSkinNote(on ? 'The deck has its own door again' : ''); }}
+                              className={`flex items-center gap-2.5 px-2 py-1.5 rounded border cursor-pointer transition-all ${on ? skinOnTone : skinIdleTone}`}
+                              role="button" aria-pressed={on}>
+                              <span className="relative w-8 h-12 shrink-0 rounded-sm overflow-hidden bg-black/30" style={{ containerType: 'inline-size' } as React.CSSProperties}>
+                                <span className="absolute left-1/2 top-1/2 block" style={{ width: '150cqw', height: '100cqw', transform: 'translate(-50%,-50%) rotate(90deg)', backgroundImage: `url("${deckSkinUrl(sk)}")`, backgroundSize: '100% 100%' }} />
+                              </span>
+                              <span className="flex-1 min-w-0 flex flex-col">
+                                <span className="text-sm truncate">{sk.name}</span>
+                                <span className="text-[9px] opacity-60 font-mono uppercase tracking-wider">{on ? 'on the deck' : 'tap to use'}</span>
+                              </span>
+                              <button type="button"
+                                onClick={(e) => { e.stopPropagation(); deleteDeckSkin(sk.id).then(() => setSkinNote(`Deleted: ${sk.name}`)); }}
+                                className="p-1.5 opacity-60 hover:opacity-100 transition-opacity emoji text-base shrink-0"
+                                title="Delete skin" aria-label={`Delete skin ${sk.name}`}>🗑️</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <input
                       type="file"
                       ref={skinInputRef}
@@ -609,7 +634,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                       accept="image/*"
                       onChange={(e) => {
                         const f = e.target.files?.[0]; e.target.value = '';
-                        if (f) uploadDeckSkin(f).then(() => setSkinNote('Customization is on the deck'), err => setSkinNote(`Could not use it: ${err?.message || err}`));
+                        if (f) uploadDeckSkin(f).then(() => setSkinNote(''), err => setSkinNote(`Could not use it: ${err?.message || err}`));
                       }}
                     />
                   </div>

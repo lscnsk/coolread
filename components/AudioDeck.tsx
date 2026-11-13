@@ -5,7 +5,7 @@ import { DeckKey, DECK_VARS, lidArt, flapArt, generatedCover } from '../utils/de
 import { PlayerKind } from '../utils/playerMode';
 import { formatTime } from '../utils/time';
 import { deckSounds } from '../utils/deckSounds';
-import { deckSkin, onDeckSkinChange } from '../utils/deckSkin';
+import { activeDeckSkinUrl, onDeckSkinChange } from '../utils/deckSkin';
 import './audioDeck.css';
 
 interface AudioDeckProps {
@@ -105,8 +105,14 @@ export function AudioDeck(props: AudioDeckProps) {
   const { book, others, kind, deckKey, isPlaying, setIsPlaying, currentTime, duration, totalProgress, onSeek } = props;
   const vars = DECK_VARS[deckKey] as React.CSSProperties;
   // The user's own door, when they have uploaded one, over every style's deck
-  const [skin, setSkin] = useState(deckSkin);
-  useEffect(() => onDeckSkinChange(() => setSkin(deckSkin())), []);
+  const [skin, setSkin] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () => activeDeckSkinUrl().then(u => { if (live) setSkin(u); });
+    load();
+    const off = onDeckSkinChange(load);
+    return () => { live = false; off(); };
+  }, []);
 
   // Live values for the animation loop and the held keys, without re-creating them each render
   const live = useRef({ isPlaying, currentTime, wind: 0, chapter: props.chapterIndex, duration, tracks: book.chapters.length });
