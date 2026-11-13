@@ -5,6 +5,7 @@ import { DeckKey, DECK_VARS, lidArt, flapArt, generatedCover } from '../utils/de
 import { PlayerKind } from '../utils/playerMode';
 import { formatTime } from '../utils/time';
 import { deckSounds } from '../utils/deckSounds';
+import { deckSkin, onDeckSkinChange } from '../utils/deckSkin';
 import './audioDeck.css';
 
 interface AudioDeckProps {
@@ -103,6 +104,9 @@ function Cassette({ book, rl, rr, hubL, hubR }: { book: Book; rl: number; rr: nu
 export function AudioDeck(props: AudioDeckProps) {
   const { book, others, kind, deckKey, isPlaying, setIsPlaying, currentTime, duration, totalProgress, onSeek } = props;
   const vars = DECK_VARS[deckKey] as React.CSSProperties;
+  // The user's own door, when they have uploaded one, over every style's deck
+  const [skin, setSkin] = useState(deckSkin);
+  useEffect(() => onDeckSkinChange(() => setSkin(deckSkin())), []);
 
   // Live values for the animation loop and the held keys, without re-creating them each render
   const live = useRef({ isPlaying, currentTime, wind: 0, chapter: props.chapterIndex, duration, tracks: book.chapters.length });
@@ -296,9 +300,11 @@ export function AudioDeck(props: AudioDeckProps) {
                 <motion.button key={b.id} type="button" className="dk-shelf-tape" data-current={b.id === book.id ? '' : undefined}
                   aria-label={b.id === book.id ? `Вернуть «${b.title}» в деку` : `Поставить «${b.title}»`}
                   onClick={() => pickTape(b)}
-                  animate={picked === b.id ? { y: 90, scale: 0.9, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
+                  animate={picked === b.id ? { y: 60, scale: 0.92, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
                   whileTap={{ scale: 0.97 }} transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
-                  <Cassette book={b} rl={b.id === book.id ? rl : RMAX} rr={b.id === book.id ? rr : RMIN} />
+                  <div className="dk-up-tape"><div className="dk-up-inner">
+                    <Cassette book={b} rl={b.id === book.id ? rl : RMAX} rr={b.id === book.id ? rr : RMIN} />
+                  </div></div>
                 </motion.button>
               ))}
             </motion.div>
@@ -312,7 +318,7 @@ export function AudioDeck(props: AudioDeckProps) {
               <Cassette book={book} rl={rl} rr={rr} hubL={hubL} hubR={hubR} />
             </div>
             <div className="dk-door">
-              <div className="dk-door-face" style={bg(lidArt(deckKey))} />
+              <div className="dk-door-face" style={bg(skin || lidArt(deckKey))} />
               <div className="dk-door-glass" /><div className="dk-door-sheen" />
             </div>
           </div>

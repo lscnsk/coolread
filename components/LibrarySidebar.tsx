@@ -7,6 +7,7 @@ import { PRESET_FONTS, getFontFamilyCSS } from '../utils/fonts';
 import { SmartCoverImage } from './SmartCoverImage';
 import { addToHomeScreen, watchHomeScreen, offerFullVersion, RUSTORE_URL, APK_URL } from '../utils/telegram';
 import { openSite } from '../utils/webBrowser';
+import { deckSkin, onDeckSkinChange, uploadDeckSkin, removeDeckSkin, saveDeckSkinTemplate } from '../utils/deckSkin';
 import { deckKeyOf, generatedCover } from '../utils/deckArt';
 import { PLAYER_EMOJI, PlayerKind } from '../utils/playerMode';
 
@@ -216,6 +217,23 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   const isMarcel = appStyle === 'Marcel';
   const v = variantOf(styleName);
   const chosen = styleName ?? appStyle;
+  // The deck skin (player mode settings)
+  const skinInputRef = useRef<HTMLInputElement>(null);
+  const [skinOn, setSkinOn] = useState(() => !!deckSkin());
+  const [skinNote, setSkinNote] = useState('');
+  useEffect(() => onDeckSkinChange(() => setSkinOn(!!deckSkin())), []);
+  const skinTone = isMarcel 
+                       ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]' 
+                       : isBimbo 
+                       ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]' 
+                       : isSurf 
+                       ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]' 
+                       : isDragon
+                       ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                       : isFF
+                       ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                       : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]';
+
   // Unselected style buttons in Settings: a quiet border in the current style's colors
   const styleBtnIdle = (name: string) => `${
     isBimbo ? 'border-[#FBCFE8]' : isSurf ? 'border-[#BAE6FD]' : isMarcel ? 'border-[#DBD0EF]' : isDragon ? 'border-[#4a2511]' : isFF ? 'border-[#17335e]' : 'border-[#363330]'
@@ -548,6 +566,54 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                     );
                   })}
                 </div>
+
+                {/* Player: the user's own skin for the cassette deck door, and the template to paint it on */}
+                {isPlayerMode && (
+                  <div className="pt-2 space-y-1.5">
+                    <div className="flex h-[64px] gap-0">
+                      <button
+                        onClick={() => skinInputRef.current?.click()}
+                        className={`flex-1 min-w-0 px-2 py-1 border-2 border-dashed rounded-l transition-all flex items-center gap-2 group text-left ${skinTone}`}
+                      >
+                        <span className="text-xl group-hover:scale-110 transition-transform emoji">🎨</span>
+                        <div className="flex flex-col min-w-0 flex-1 justify-center">
+                          <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">Upload customization</span>
+                          <span className="text-[8.5px] opacity-60 font-mono mt-0.5 truncate">{skinOn ? 'your skin is on' : 'png or jpg'}</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { saveDeckSkinTemplate(deckKeyOf(appStyle, styleName)).then(where => setSkinNote(`Template saved: ${where}`), e => setSkinNote(`Could not save: ${e?.message || e}`)); }}
+                        className={`w-[60px] shrink-0 border-2 border-dashed border-l-0 ${skinOn ? '' : 'rounded-r'} transition-all flex flex-col items-center justify-center gap-0.5 ${skinTone}`}
+                        title="Download the template"
+                        aria-label="Download the template"
+                      >
+                        <span className="text-xl emoji leading-none">⬇️</span>
+                        <span className="text-[8.5px] font-bold uppercase tracking-wider opacity-80">template</span>
+                      </button>
+                      {skinOn && (
+                        <button
+                          onClick={() => { removeDeckSkin(); setSkinNote('The deck has its own door again'); }}
+                          className={`w-[40px] shrink-0 border-2 border-dashed border-l-0 rounded-r transition-all flex items-center justify-center ${skinTone}`}
+                          title="Remove the customization"
+                          aria-label="Remove the customization"
+                        >
+                          <span className="text-lg emoji leading-none">✖️</span>
+                        </button>
+                      )}
+                    </div>
+                    {skinNote && <div className="text-[10px] opacity-70 font-mono px-1 break-all">{skinNote}</div>}
+                    <input
+                      type="file"
+                      ref={skinInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]; e.target.value = '';
+                        if (f) uploadDeckSkin(f).then(() => setSkinNote('Customization is on the deck'), err => setSkinNote(`Could not use it: ${err?.message || err}`));
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* Font Selection Button & Dropdown (Hidden in audio mode) */}
                 {mode !== 'audio' && (
