@@ -13,7 +13,7 @@ export interface NowPlayingInfo {
 }
 
 interface NowPlayingPlugin {
-  update(o: NowPlayingInfo & { playing: boolean; loading?: boolean; position?: number; duration?: number; speed?: number }): Promise<void>;
+  update(o: NowPlayingInfo & { playing: boolean; loading?: boolean; position?: number; duration?: number; speed?: number; /** tapes and albums: no speed buttons */ fixedSpeed?: boolean }): Promise<void>;
   clear(): Promise<void>;
   addListener(event: 'action', cb: (e: { action: 'play' | 'pause' | 'back' | 'forward' | 'seek' | 'stop' | 'slower' | 'faster'; position: number }) => void): Promise<PluginListenerHandle>;
 }

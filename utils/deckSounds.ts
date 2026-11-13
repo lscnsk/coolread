@@ -10,7 +10,7 @@ function audio(): AudioContext | null {
     if (!ctx) {
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       if (!AC) return null;
-      ctx = new AC();
+      ctx = new AC({ latencyHint: 'interactive' });
     }
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return ctx;
@@ -49,6 +49,8 @@ export const deckSounds = {
   keyUp() { const c = audio(); if (!c) return; const t = c.currentTime; tick(c, t, 3400, 0.1, 0.012); },
   /** PLAY latching: the key locks and the mechanism engages */
   latch() { const c = audio(); if (!c) return; const t = c.currentTime; tick(c, t, 2200, 0.25); thump(c, t, 110, 0.22, 0.09); tick(c, t + 0.07, 1500, 0.12, 0.03); },
+  /** STOP while playing: PLAY springs back up, the mechanism lets go of the tape */
+  release() { const c = audio(); if (!c) return; const t = c.currentTime; tick(c, t, 2000, 0.28); thump(c, t, 100, 0.22, 0.08); tick(c, t + 0.05, 3200, 0.16, 0.015); tick(c, t + 0.09, 1300, 0.1, 0.03); },
   /** The cassette sliding in, seating, and the door snapping shut */
   insert() {
     const c = audio(); if (!c) return; const t = c.currentTime;

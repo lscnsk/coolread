@@ -159,62 +159,6 @@ const memo = (k: string, make: () => string) => cache[k] || (cache[k] = make());
 export const lidArt = (key: DeckKey) => memo('lid:' + key, () => drawLidCanvas(key));
 export const flapArt = (key: DeckKey) => memo('flap:' + key, () => drawLidCanvas(key, 516, false));
 
-/* Key faces: the style's material (brushed metal, pearl, copper facets…) under the icons */
-export function keyFace(key: DeckKey, on = false): string {
-  return memo(`key:${key}:${on}`, () => {
-    const W = 240, H = 150, c = document.createElement('canvas'); c.width = W; c.height = H;
-    const g = c.getContext('2d')!, v = DECK_VARS[key];
-    let seed = key.charCodeAt(0) * 131 + (on ? 7 : 3); const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const base = g.createLinearGradient(0, 0, 0, H);
-    base.addColorStop(0, on ? v['--key-on1'] : v['--key1']); base.addColorStop(1, on ? v['--key-on2'] : v['--key2']);
-    g.fillStyle = base; g.fillRect(0, 0, W, H);
-    const dark = !['Marcel', 'Bimbo', 'Surf', 'Mint'].includes(key);
-    const ink = (a: number) => dark ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * .6})`;
-    if (key === 'Cool') {
-      for (let y = 0; y < H; y += 1) { g.fillStyle = `rgba(255,255,255,${r() * .07})`; g.fillRect(0, y, W, 1); }
-      const sh = g.createRadialGradient(W * .5, -H * .4, 10, W * .5, -H * .4, H * 1.3); sh.addColorStop(0, 'rgba(255,255,255,.16)'); sh.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = sh; g.fillRect(0, 0, W, H);
-    } else if (key === 'Marcel') {
-      for (let i = 0; i < 140; i++) { g.fillStyle = `rgba(122,102,160,${r() * .18})`; g.beginPath(); g.arc(r() * W, r() * H, r() * 1.4, 0, 7); g.fill(); }
-      const gl = g.createLinearGradient(0, 0, W, H); gl.addColorStop(0, 'rgba(255,255,255,.5)'); gl.addColorStop(.4, 'rgba(255,255,255,0)'); g.fillStyle = gl; g.fillRect(0, 0, W, H);
-    } else if (key === 'Bimbo') {
-      const hues = [330, 280, 200, 150, 40];
-      for (let k = 0; k < 5; k++) { const x = r() * W, y = r() * H, R = 60 + r() * 60, rg = g.createRadialGradient(x, y, 0, x, y, R); rg.addColorStop(0, `hsla(${hues[k]},90%,85%,${on ? .3 : .45})`); rg.addColorStop(1, `hsla(${hues[k]},90%,85%,0)`); g.fillStyle = rg; g.fillRect(0, 0, W, H); }
-      for (let i = 0; i < 14; i++) { g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(r() * W, r() * H, .6 + r() * 1.2, 0, 7); g.fill(); }
-    } else if (key === 'Surf') {
-      g.strokeStyle = on ? 'rgba(255,255,255,.35)' : 'rgba(14,165,233,.22)'; g.lineWidth = 2;
-      for (let y = 20; y < H; y += 26) { g.beginPath(); for (let x = 0; x <= W; x += 8) g.lineTo(x, y + Math.sin(x * .05 + y) * 4); g.stroke(); }
-      for (let i = 0; i < 18; i++) { g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(r() * W, r() * H, 1.5 + r() * 3, 0, 7); g.stroke(); }
-    } else if (key === 'Roll') {
-      const N = 6, M = 4, pts: number[][][] = [];
-      for (let j = 0; j <= M; j++) { pts[j] = []; for (let i = 0; i <= N; i++) pts[j][i] = [i / N * W + (i % N ? (r() - .5) * 20 : 0), j / M * H + (j % M ? (r() - .5) * 18 : 0)]; }
-      const tri = (a: number[], b: number[], d: number[]) => { const s = r(); g.fillStyle = `rgba(${on ? '255,230,160' : '255,170,90'},${.04 + s * .14})`; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(d[0], d[1]); g.closePath(); g.fill(); g.strokeStyle = 'rgba(252,211,77,.18)'; g.lineWidth = 1; g.stroke(); };
-      for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) { tri(pts[j][i], pts[j][i + 1], pts[j + 1][i + 1]); tri(pts[j][i], pts[j + 1][i + 1], pts[j + 1][i]); }
-    } else if (key === 'Final') {
-      for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(240,222,186,${.15 + r() * .5})`; g.beginPath(); g.arc(r() * W, r() * H, r() * 1.3 + .3, 0, 7); g.fill(); }
-      g.strokeStyle = 'rgba(204,169,114,.55)'; g.lineWidth = 2; g.strokeRect(8, 8, W - 16, H - 16);
-    } else if (key === 'Code') {
-      g.fillStyle = 'rgba(0,0,0,.3)'; for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
-      g.fillStyle = on ? 'rgba(3,6,4,.25)' : 'rgba(74,222,128,.12)'; g.font = '12px "Share Tech Mono", monospace';
-      for (let i = 0; i < 26; i++) g.fillText(r() > .5 ? '1' : '0', r() * W, r() * H);
-    } else if (key === 'Byte') {
-      const P = 10; for (let y = 0; y < H; y += P) for (let x = 0; x < W; x += P) if (r() > .82) { g.fillStyle = r() > .5 ? 'rgba(255,79,216,.22)' : 'rgba(94,234,212,.2)'; g.fillRect(x, y, P, P); }
-    } else if (key === 'Mint') {
-      g.strokeStyle = on ? 'rgba(255,255,255,.3)' : 'rgba(91,133,56,.22)'; g.lineWidth = 1.2;
-      for (let i = 0; i < 6; i++) { const x = r() * W, y = r() * H, a = r() * 6, L = 20 + r() * 20; g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.moveTo(-L, 0); g.quadraticCurveTo(0, -L * .5, L, 0); g.quadraticCurveTo(0, L * .5, -L, 0); g.stroke(); g.restore(); }
-    } else if (key === 'Jazz') {
-      g.strokeStyle = on ? 'rgba(11,11,10,.25)' : 'rgba(212,180,106,.25)'; g.lineWidth = 1;
-      for (let k = 0; k <= 18; k++) { const a = Math.PI + k / 18 * Math.PI; g.beginPath(); g.moveTo(W / 2, H + 10); g.lineTo(W / 2 + Math.cos(a) * 300, H + 10 + Math.sin(a) * 300); g.stroke(); }
-    }
-    // a soft top light and a darker lower lip, like a moulded key
-    const lip = g.createLinearGradient(0, 0, 0, H); lip.addColorStop(0, ink(.14)); lip.addColorStop(.12, 'rgba(255,255,255,0)'); lip.addColorStop(.85, 'rgba(0,0,0,0)'); lip.addColorStop(1, 'rgba(0,0,0,.18)');
-    g.fillStyle = lip; g.fillRect(0, 0, W, H);
-    const d = g.getImageData(0, 0, W, H), px = d.data;
-    for (let i = 0; i < px.length; i += 4) { const n = (r() - .5) * 10; px[i] += n; px[i + 1] += n; px[i + 2] += n; }
-    g.putImageData(d, 0, 0);
-    return c.toDataURL('image/png');
-  });
-}
-
 /* A cover for a book that has none: painted gradient and shapes from its title, its name at the bottom.
    The same title always gives the same picture. */
 export function generatedCover(title: string, author = ''): string {

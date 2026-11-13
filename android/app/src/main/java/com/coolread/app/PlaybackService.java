@@ -49,12 +49,14 @@ public class PlaybackService extends Service {
         boolean playing, loading, speech;
         long positionMs = -1, durationMs = -1;
         float speed = 1f;
+        /** Tapes and albums: no speed buttons and no speed in the subtitle */
+        boolean fixedSpeed;
 
         NowPlaying copy() {
             NowPlaying n = new NowPlaying();
             n.title = title; n.subtitle = subtitle; n.cover = cover; n.color = color;
             n.playing = playing; n.loading = loading; n.speech = speech;
-            n.positionMs = positionMs; n.durationMs = durationMs; n.speed = speed;
+            n.positionMs = positionMs; n.durationMs = durationMs; n.speed = speed; n.fixedSpeed = fixedSpeed;
             return n;
         }
     }
@@ -207,8 +209,10 @@ public class PlaybackService extends Service {
             ps.addCustomAction(FORWARD, getString(R.string.playback_forward), R.drawable.ic_playback_forward);
         }
         // Speed buttons: on new Android versions they take the free places of the player
-        ps.addCustomAction(SLOWER, getString(R.string.playback_slower), R.drawable.ic_speed_down);
-        ps.addCustomAction(FASTER, getString(R.string.playback_faster), R.drawable.ic_speed_up);
+        if (!s.fixedSpeed) {
+            ps.addCustomAction(SLOWER, getString(R.string.playback_slower), R.drawable.ic_speed_down);
+            ps.addCustomAction(FASTER, getString(R.string.playback_faster), R.drawable.ic_speed_up);
+        }
         int st = s.loading ? PlaybackState.STATE_BUFFERING : s.playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED;
         ps.setActions(actions).setState(st, s.positionMs >= 0 ? s.positionMs : PlaybackState.PLAYBACK_POSITION_UNKNOWN,
             s.playing && !s.loading ? s.speed : 0f, SystemClock.elapsedRealtime());
@@ -233,6 +237,7 @@ public class PlaybackService extends Service {
 
     /** The subtitle with the speed after it, e.g. "Author · 1.25×". */
     private static String withSpeed(NowPlaying s) {
+        if (s.fixedSpeed) return s.subtitle == null ? "" : s.subtitle;
         String sp = String.format(java.util.Locale.US, "%.2f", s.speed > 0 ? s.speed : 1f).replaceAll("0$", "").replaceAll("\\.0$", "") + "×";
         return s.subtitle == null || s.subtitle.isEmpty() ? sp : s.subtitle + " · " + sp;
     }
@@ -261,14 +266,16 @@ public class PlaybackService extends Service {
         if (s.color != 0) b.setColor(s.color);
         int back = s.speech ? R.drawable.ic_playback_previous : R.drawable.ic_playback_back;
         int fwd = s.speech ? R.drawable.ic_playback_next : R.drawable.ic_playback_forward;
-        b.addAction(new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_speed_down), getString(R.string.playback_slower), action(SLOWER, 5)).build());
+        if (!s.fixedSpeed) b.addAction(new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_speed_down), getString(R.string.playback_slower), action(SLOWER, 5)).build());
         b.addAction(new Notification.Action.Builder(Icon.createWithResource(this, back), getString(R.string.playback_back), action(BACK, 1)).build());
         b.addAction(playing
             ? new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_playback_pause), getString(R.string.playback_pause), action(PAUSE, 2)).build()
             : new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_playback_play), getString(R.string.playback_play), action(PLAY, 2)).build());
         b.addAction(new Notification.Action.Builder(Icon.createWithResource(this, fwd), getString(R.string.playback_forward), action(FORWARD, 3)).build());
-        b.addAction(new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_speed_up), getString(R.string.playback_faster), action(FASTER, 6)).build());
-        b.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(1, 2, 3));
+        if (!s.fixedSpeed) b.addAction(new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_speed_up), getString(R.string.playback_faster), action(FASTER, 6)).build());
+        // Compact view: back, play / pause, forward (they move up one place without the speed buttons)
+        int first = s.fixedSpeed ? 0 : 1;
+        b.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(first, first + 1, first + 2));
         return b.build();
     }
 

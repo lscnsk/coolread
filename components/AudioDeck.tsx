@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
-import { DeckKey, DECK_VARS, lidArt, flapArt, keyFace, generatedCover } from '../utils/deckArt';
+import { DeckKey, DECK_VARS, lidArt, flapArt, generatedCover } from '../utils/deckArt';
 import { PlayerKind } from '../utils/playerMode';
 import { formatTime } from '../utils/time';
 import { deckSounds } from '../utils/deckSounds';
@@ -142,11 +142,18 @@ export function AudioDeck(props: AudioDeckProps) {
   const totalRef = useRef(totalProgress); totalRef.current = totalProgress;
 
   // ----- keys -----
+  // PLAY and STOP act the moment they are pressed, as on a real deck
+  const [tap, setTap] = useState<string | null>(null);
   const play = () => {
-    if (bay === 'in') { if (isPlaying) deckSounds.keyDown(); else deckSounds.latch(); setIsPlaying(true); }
+    if (bay === 'in') { if (isPlaying) deckSounds.keyDown(); else { deckSounds.latch(); setIsPlaying(true); } }
     else if (bay === 'out') { deckSounds.keyDown(); insert().then(() => { deckSounds.latch(); setIsPlaying(true); }); }
+    else deckSounds.keyDown();
   };
-  const stop = () => { deckSounds.keyDown(); if (isPlaying) setIsPlaying(false); else if (bay === 'in') eject(); };
+  const stop = () => {
+    if (isPlaying) { deckSounds.release(); setIsPlaying(false); }
+    else if (bay === 'in') { deckSounds.keyDown(); eject(); }
+    else deckSounds.keyDown();
+  };
   // REW / FF: a tap jumps 15 s, holding winds faster and faster
   const [held, setHeld] = useState<number>(0);
   const holdRef = useRef<{ timer?: number; tick?: number; step: number; wound: boolean; hush?: () => void }>({ step: 5, wound: false });
@@ -206,7 +213,9 @@ export function AudioDeck(props: AudioDeckProps) {
   return (
     <div className="dk" style={vars}>
       {kind === 'tape' ? (
-        <div className="dk-deck">
+        <div className="dk-deck dk-vertical">
+          {/* The deck stands upright: the bay is drawn landscape and turned a quarter */}
+          <div className="dk-upright">
           <div className={`dk-bay ${bay === 'in' ? '' : bay}${doorOpen ? ' open' : ''}`}>
             <div className="dk-slot" onClick={() => { if (bay === 'out') insert(); }}>
               <div className="dk-cassette" style={{ ['--rl' as any]: rl.toFixed(2), ['--rr' as any]: rr.toFixed(2) }}>
@@ -233,20 +242,23 @@ export function AudioDeck(props: AudioDeckProps) {
               <div className="dk-door-glass" /><div className="dk-door-sheen" />
             </div>
           </div>
+          </div>
           <div className="dk-keys">
             {([['rew', -1], ['play', 0], ['stop', 0], ['ff', 1]] as const).map(([k, dir]) => {
               const latched = k === 'play' && isPlaying;
-              const down = latched || (dir !== 0 && held === dir);
+              const down = latched || (dir !== 0 && held === dir) || tap === k;
               const handlers = dir !== 0
                 ? { onPointerDown: (e: React.PointerEvent) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); startWind(dir); },
                     onPointerUp: () => endWind(dir), onPointerCancel: () => endWind(dir),
                     onKeyDown: (e: React.KeyboardEvent) => { if ((e.key === ' ' || e.key === 'Enter') && bay === 'in') { e.preventDefault(); onSeek(currentTime + dir * 15); } } }
-                : { onClick: k === 'play' ? play : stop };
+                : { onPointerDown: () => { setTap(k); (k === 'play' ? play : stop)(); },
+                    onPointerUp: () => setTap(null), onPointerCancel: () => setTap(null), onPointerLeave: () => setTap(null),
+                    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); (k === 'play' ? play : stop)(); } } };
               return (
-                <button key={k} type="button" className={`dk-key${down ? ' down' : ''}${latched ? ' latched' : ''}`}
-                  style={bg(keyFace(deckKey, latched))}
+                <button key={k} type="button" className={`dk-key k-${k}${down ? ' down' : ''}${latched ? ' latched' : ''}`}
                   aria-label={k === 'rew' ? 'Назад: нажмите или удерживайте' : k === 'ff' ? 'Вперёд: нажмите или удерживайте' : k === 'play' ? 'Играть' : 'Стоп, на паузе извлекает кассету'}
                   {...handlers}>
+                  <i className="dk-led" />
                   {k === 'rew' ? ICON.rew : k === 'ff' ? ICON.ff : k === 'play' ? ICON.play : ICON.pause}
                   <small>{k === 'stop' ? 'STOP/EJ' : k.toUpperCase()}</small>
                 </button>
@@ -284,14 +296,14 @@ export function AudioDeck(props: AudioDeckProps) {
         </>
       )}
 
-      <div className="dk-strip">
+      {kind === 'vinyl' && <div className="dk-strip">
         <AnimatePresence initial={false} mode="popLayout">
           {others.map(b => (
             <motion.button
               layout
               key={b.id}
               type="button"
-              aria-label={kind === 'tape' ? `Вставить «${b.title}»` : `Поставить «${b.title}»`}
+              aria-label={`Поставить «${b.title}»`}
               onClick={() => choose(b)}
               initial={{ opacity: 0, y: -40, scale: 0.9 }}
               animate={picked === b.id ? { opacity: 1, y: -16, scale: 1.04, rotate: -3 } : { opacity: 1, y: 0, scale: 1, rotate: 0 }}
@@ -299,18 +311,11 @@ export function AudioDeck(props: AudioDeckProps) {
               whileTap={{ y: -6 }}
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
             >
-              {kind === 'tape' ? (
-                <span className="dk-case">
-                  <motion.span className="dk-flap" style={bg(flapArt(deckKey))} animate={{ rotateX: picked === b.id ? 55 : 0 }} transition={{ duration: 0.3 }} />
-                  <span className="dk-sheet"><span className="dk-lines" /><span className="dk-jt">{b.title}</span></span>
-                </span>
-              ) : (
-                <span className="dk-sleeve" style={bg(coverOf(b))} />
-              )}
+              <span className="dk-sleeve" style={bg(coverOf(b))} />
             </motion.button>
           ))}
         </AnimatePresence>
-      </div>
+      </div>}
     </div>
   );
 }

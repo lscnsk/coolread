@@ -57,6 +57,7 @@ public class NowPlayingPlugin extends Plugin implements PlaybackService.Controll
         if (pos != null) np.positionMs = Math.round(pos * 1000);
         if (dur != null && dur > 0) np.durationMs = Math.round(dur * 1000);
         np.speed = call.getFloat("speed", 1f);
+        np.fixedSpeed = call.getBoolean("fixedSpeed", false);
         getActivity().runOnUiThread(() -> {
             PlaybackService.update(getContext(), np, this);
             call.resolve();

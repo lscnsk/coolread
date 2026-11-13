@@ -971,8 +971,8 @@ function App() {
   };
 
   // Player notification for audiobooks (also on the lock screen and headphones)
-  const audioActionsRef = useRef({ togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate });
-  audioActionsRef.current = { togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate };
+  const audioActionsRef = useRef({ togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate, fixedSpeed: false });
+  audioActionsRef.current = { togglePlay, setIsPlaying, seekInBook, seekAudio, currentTime, isPlaying, playbackRate, setPlaybackRate, fixedSpeed: !!deckKind };
   const audioNotifiedRef = useRef(false);
   useEffect(() => {
     if (!isNativePlayer) return;
@@ -984,7 +984,7 @@ function App() {
       else if (e.action === 'forward') a.seekInBook(a.currentTime + 10);
       else if (e.action === 'seek') a.seekAudio(e.position);
       // Same steps and limits as the speed buttons of the player
-      else if (e.action === 'slower' || e.action === 'faster') {
+      else if ((e.action === 'slower' || e.action === 'faster') && !a.fixedSpeed) {
         const r = Math.round((a.playbackRate + (e.action === 'faster' ? 0.25 : -0.25)) * 4) / 4;
         a.setPlaybackRate(Math.max(1, Math.min(5, r)));
       }
@@ -1016,11 +1016,12 @@ function App() {
         position: currentTime,
         duration,
         speed: playbackRate,
+        fixedSpeed: !!deckKind,
       }).catch(() => {});
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentBook?.id, currentChapterIndex, isPlaying, isAudioLoading, duration, playbackRate, styleName, positionBucket]);
+  }, [mode, currentBook?.id, currentChapterIndex, isPlaying, isAudioLoading, duration, playbackRate, styleName, positionBucket, deckKind]);
 
   // Colours of the added styles (Code, Byte, Mint, Jazz) on top of their base style's CSS
   useLayoutEffect(() => { applyStyleVariant(variantOf(styleName)); }, [styleName, theme, isStyledMode]);
@@ -1285,10 +1286,12 @@ function App() {
                 isNative={isNative} 
                 appStyle={appStyle} 
                 styleName={styleName}
-                onExternalFilePicked={handleExternalFilePicked}
+                onExternalFilePicked={(files) => { if (!isPlayerMode) expectNewAudiobooks(null); return handleExternalFilePicked(files); }}
                 onExternalFolderPicked={handleExternalFolderPicked}
                 currentBook={currentBook}
                 onOpenCatalog={() => setIsCatalogOpen(true)}
+                isPlayerMode={isPlayerMode}
+                onAddAudio={(kind) => expectNewAudiobooks(kind)}
              />
           ) : (
             mode === 'audio' && deckKind ? (
@@ -1300,7 +1303,13 @@ function App() {
                         kind={deckKind}
                         deckKey={deckKeyOf(appStyle, styleName)}
                         isPlaying={isPlaying}
-                        setIsPlaying={setIsPlaying}
+                        setIsPlaying={(v) => {
+                            // The deck's keys act at once: pause the audio before React gets round to it
+                            const el = audioRef.current;
+                            if (!v && el && !el.paused) el.pause();
+                            if (v && el && el.paused) { togglePlay(); return; }
+                            setIsPlaying(v);
+                        }}
                         isLoading={isAudioLoading}
                         currentTime={currentTime}
                         duration={duration}

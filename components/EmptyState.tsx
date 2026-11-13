@@ -1,5 +1,7 @@
 import React, { useRef } from 'react';
 import { variantOf } from '../utils/styleVariants';
+import { deckKeyOf } from '../utils/deckArt';
+import { PLAYER_EMOJI, PlayerKind } from '../utils/playerMode';
 
 interface EmptyStateProps {
   isLoading: boolean;
@@ -15,6 +17,10 @@ interface EmptyStateProps {
   onOpenCatalog?: () => void;
   // "lscnsk, flibusta, mangadex": the catalogs the Download button leads to
   catalogNames?: string;
+  /** The player (tapes and albums): its own add buttons instead of the library's */
+  isPlayerMode?: boolean;
+  /** Called before the file picker opens for "add tape" / "add album" */
+  onAddAudio?: (kind: PlayerKind) => void;
 }
 
 export function EmptyState({ 
@@ -28,7 +34,9 @@ export function EmptyState({
   onExternalFolderPicked,
   currentBook,
   onOpenCatalog,
-  catalogNames
+  catalogNames,
+  isPlayerMode = false,
+  onAddAudio
 }: EmptyStateProps) {
   const isMarcel = appStyle === 'Marcel';
   const isBimbo = appStyle === 'Bimbo';
@@ -51,6 +59,7 @@ export function EmptyState({
 
   const bookInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading) {
     return (
@@ -63,6 +72,41 @@ export function EmptyState({
             isFF ? 'border-[#e0d6c1] border-t-[#cca972]' :
             'border-[#fffff0]/20 border-t-[#fffff0]'
         }`}></div>
+      </div>
+    );
+  }
+
+  if (!currentBook && isPlayerMode) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 mt-16 z-0 relative">
+        <div className="text-4xl emoji">{PLAYER_EMOJI[deckKeyOf(appStyle, styleName)].collection}</div>
+        <div className="max-w-xs w-full space-y-3">
+          {([['tape', '📼', 'Add tape', 'plays as a cassette · mp3, m4b, m4a'], ['vinyl', '💿', 'Add album', 'plays as a record · mp3, m4b, m4a']] as const).map(([kind, emoji, title, hint]) => (
+            <button
+              key={kind}
+              onClick={() => { onAddAudio?.(kind); audioInputRef.current?.click(); }}
+              className={`w-full py-5 px-4 border-2 border-dashed rounded-2xl transition-all flex flex-col items-center gap-2 group ${buttonStyle}`}
+            >
+              <span className="text-3xl group-hover:scale-110 transition-transform emoji">{emoji}</span>
+              <div className="flex flex-col items-center">
+                <span className="text-base font-bold uppercase tracking-widest">{title}</span>
+                <span className="text-[9.5px] opacity-60 font-mono text-center">{hint}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+        <input
+          type="file"
+          ref={audioInputRef}
+          className="hidden"
+          multiple
+          accept={isNative ? undefined : ".mp3,.m4b,.m4a,.mp4,audio/*,.jpg,.jpeg,.png,.webp,image/*"}
+          onChange={(e) => {
+            const files = e.target.files;
+            if (files && files.length > 0 && onExternalFilePicked) onExternalFilePicked(files);
+            e.target.value = '';
+          }}
+        />
       </div>
     );
   }
