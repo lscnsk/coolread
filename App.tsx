@@ -5,7 +5,8 @@ import { motion } from 'motion/react';
 import LibrarySidebar from './components/LibrarySidebar';
 import PlayerControls from './components/PlayerControls';
 import { AudioDeck } from './components/AudioDeck';
-import { deckKeyOf } from './utils/deckArt';
+import { deckKeyOf, generatedCover } from './utils/deckArt';
+import { useCoverTint, tintBackground } from './utils/coverTint';
 import { assignPlayerKinds, expectNewAudiobooks, deckKindOf, isInCollection, savedPlayerMode, savePlayerMode, forgetPlayerKind } from './utils/playerMode';
 import ChapterSidebar from './components/ChapterSidebar';
 import EBookControls from './components/EBookControls';
@@ -894,6 +895,8 @@ function App() {
   }, [books, isLibraryReady]);
   const inMode = (b: Book) => isInCollection(b) === isPlayerMode;
   const deckKind = currentBook && mode === 'audio' ? deckKindOf(currentBook.id) : null;
+  // The player takes on the colour of the tape's or album's cover
+  const coverTint = useCoverTint(deckKind && currentBook ? (currentBook.coverUrl || generatedCover(currentBook.title, currentBook.author)) : null);
   // Tapes and albums play at their own speed; the speed choice stays with the standard player
   useEffect(() => { if (deckKind && playbackRate !== 1) setPlaybackRate(1); }, [deckKind, playbackRate]);
 
@@ -1296,7 +1299,8 @@ function App() {
           ) : (
             mode === 'audio' && deckKind ? (
                 // Player mode: the cassette deck or the record, with the rest of the collection under it
-                <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-[124px] pb-6 flex flex-col">
+                <div className={`flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden ${deckKind === 'tape' ? 'px-2' : 'px-4'} pt-[124px] pb-6 flex flex-col`}
+                     style={coverTint ? { background: tintBackground(coverTint), transition: 'background .6s' } : undefined}>
                     <AudioDeck
                         book={currentBook}
                         others={activeBooks.filter(b => b.id !== currentBook.id && !b.missing && b.type === 'audio' && deckKindOf(b.id) === deckKind)}

@@ -20,7 +20,7 @@
 .dk-bay::after{content:"";position:absolute;inset:0;border-radius:12px;pointer-events:none;background:linear-gradient(transparent 60%,rgba(0,0,0,.45));opacity:0;transition:opacity .4s}
 .dk-bay.open::after{opacity:1}
 
-.dk-vertical{max-width:min(100%,calc((100dvh - 260px) * .66));margin:0 auto}
+.dk-vertical{max-width:min(100%,calc((100dvh - 230px) * .7));margin:0 auto}
 /* upright deck: the landscape bay is turned a quarter inside a 2:3 frame */
 .dk-upright{position:relative;width:100%;aspect-ratio:2/3;container-type:inline-size}
 .dk-upright > .dk-bay{position:absolute;left:50%;top:50%;width:150cqw;transform:translate(-50%,-50%) rotate(90deg)}
