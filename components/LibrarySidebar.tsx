@@ -7,6 +7,8 @@ import { PRESET_FONTS, getFontFamilyCSS } from '../utils/fonts';
 import { SmartCoverImage } from './SmartCoverImage';
 import { addToHomeScreen, watchHomeScreen, offerFullVersion, RUSTORE_URL, APK_URL } from '../utils/telegram';
 import { openSite } from '../utils/webBrowser';
+import { deckKeyOf, generatedCover } from '../utils/deckArt';
+import { PLAYER_EMOJI, BOOKS_EMOJI, PLAYER_SWITCH_EMOJI, PlayerKind } from '../utils/playerMode';
 
 interface LibrarySidebarProps {
   books: Book[];
@@ -31,6 +33,10 @@ interface LibrarySidebarProps {
   onDeleteCustomFont?: (name: string) => void;
   onOpenCatalog?: () => void;
   catalogNames?: string;
+  /** Books ⇄ player: the 🎧 button in the library, the book button in the collection */
+  onSwitchPlayerMode?: () => void;
+  /** Called before the file picker opens for "add tape" / "add album" */
+  onAddAudio?: (kind: PlayerKind) => void;
 }
 
 // Style buttons in Settings: on mouse hover each one lights up in its own style.
@@ -69,7 +75,9 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   onAddCustomFont,
   onDeleteCustomFont,
   onOpenCatalog,
-  catalogNames
+  catalogNames,
+  onSwitchPlayerMode,
+  onAddAudio
 }) => {
   const [view, setView] = useState<'library' | 'settings'>('library');
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -110,6 +118,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
     return [...filteredPresets, ...customOptions];
   }, [customFonts]);
   const bookInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const isPlayerMode = mode === 'audio';
   const folderInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -268,7 +278,9 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         <div 
             className={`shrink-0 bg-[#23211f] flex items-center justify-center border relative z-10 overflow-hidden rounded ${isSelected ? 'border-[#57534e]' : 'border-[#45413e]'} ${isAudio ? 'w-12 h-12' : 'w-10 h-14'}`}
         >
-            {book.coverUrl ? (
+            {!book.coverUrl && isAudio && isPlayerMode ? (
+                <img src={generatedCover(book.title, book.author)} alt="" className="w-full h-full object-cover" />
+            ) : book.coverUrl ? (
                 <SmartCoverImage
                   src={book.coverUrl}
                   alt="Cover"
@@ -397,8 +409,8 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
           <h2 className="text-xl font-bold flex items-center gap-1.5 text-[#fffff0] min-w-0 flex-1 overflow-hidden">
             {view === 'library' ? (
               <>
-                <span className="text-3xl leading-none flex-shrink-0 emoji">{v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
-                <span className={`leading-normal whitespace-nowrap ${v ? v.panelTitleClass : isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>Library</span>
+                <span className="text-3xl leading-none flex-shrink-0 emoji">{isPlayerMode ? PLAYER_EMOJI[deckKeyOf(appStyle, styleName)].collection : v ? v.libraryEmoji : isMarcel ? '🪶' : isDragon ? '🍻' : (isFF ? '🎒' : (isBimbo ? '💖' : (isSurf ? '🏖️' : '📚')))}</span>
+                <span className={`leading-normal whitespace-nowrap ${isPlayerMode ? 'inline-block origin-left scale-[0.88]' : ''} ${v ? v.panelTitleClass : isMarcel ? 'font-marcel font-medium text-[26px] tracking-wide translate-y-[1px]' : isBimbo ? 'font-bimbo font-medium text-[26px] tracking-wide translate-y-[1px]' : (isSurf ? 'font-surf font-medium text-[28px] tracking-wide translate-y-[1px]' : (isFF ? 'font-ff font-semibold text-[21px] tracking-wider translate-y-[1px]' : (isDragon ? 'font-dragon font-medium text-[22px] tracking-wide text-[#fffff0] translate-y-[1px]' : 'font-literata font-bold text-[22px] tracking-wide')))}`}>{isPlayerMode ? 'Collection' : 'Library'}</span>
               </>
             ) : (
               <>
@@ -411,6 +423,16 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         <div className="flex items-center gap-0 shrink-0">
           {view === 'library' && !isSearchMode && (
             <>
+              {onSwitchPlayerMode && (
+                <button
+                  onClick={onSwitchPlayerMode}
+                  className="text-[#888] hover:text-[#fffff0] p-0.5 hover:scale-110 transition-transform shrink-0"
+                  title={isPlayerMode ? 'Books' : 'Player'}
+                  aria-label={isPlayerMode ? 'Книги' : 'Плеер аудиокниг'}
+                >
+                  <span className="text-2xl leading-none emoji">{isPlayerMode ? BOOKS_EMOJI : PLAYER_SWITCH_EMOJI}</span>
+                </button>
+              )}
               <button 
                 onClick={() => { setView('settings'); setIsSearchMode(false); setSearchQuery(''); }} 
                 className="text-[#888] hover:text-[#fffff0] p-0.5 hover:scale-110 transition-transform shrink-0"
@@ -839,6 +861,47 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
              {/* Add Book Buttons Area */}
             {!isSearchMode && !searchQuery && (
               <div className="mt-2 pb-12 space-y-2">
+                 {/* Player mode: a cassette or an album, the player plays it as one */}
+                 {isPlayerMode && ([['tape', '📼', 'Add tape', 'plays as a cassette · mp3, m4b, m4a'], ['vinyl', '💿', 'Add album', 'plays as a record · mp3, m4b, m4a']] as const).map(([kind, emoji, title, hint]) => (
+                   <button
+                     key={kind}
+                     onClick={() => { onAddAudio?.(kind); audioInputRef.current?.click(); }}
+                     className={`w-full h-[64px] shrink-0 px-2.5 py-1 border-2 border-dashed rounded transition-all flex items-center gap-3 group text-left ${
+                     isMarcel 
+                       ? 'border-[#C4B5E6] bg-[#E8E0F5] text-[#544372] hover:bg-[#DBD0EF] hover:text-[#2F2440] hover:border-[#AC97D7]' 
+                       : isBimbo 
+                       ? 'border-[#FBCFE8] bg-[#FFF0F5] text-[#BE123C] hover:bg-pink-100 hover:border-[#F472B6]' 
+                       : isSurf 
+                       ? 'border-[#BAE6FD] bg-[#F0F9FF] text-[#0c4a6e] hover:bg-sky-100 hover:border-[#7dd3fc]' 
+                       : isDragon
+                       ? 'border-[#7f1d1d] bg-[#3a1a0e] text-[#fcd34d] hover:bg-[#4a2511] hover:border-[#991b1b]'
+                       : isFF
+                       ? 'border-[#406da3] bg-[#0d2347] text-[#f0deba] hover:bg-[#17335e] hover:border-[#dfc894]'
+                       : 'border-[#57534e] bg-[#363330] text-[#fffff0] hover:bg-[#45413e] hover:border-[#666]'
+                   }`}
+                   >
+                     <div className={`w-10 h-14 shrink-0 rounded flex items-center justify-center ${
+                     isMarcel
+                       ? 'bg-[#C4B5E6]/40 text-[#544372]'
+                       : isBimbo
+                       ? 'bg-[#FBCFE8]/60 text-[#BE123C]'
+                       : isSurf
+                       ? 'bg-[#BAE6FD]/60 text-[#0284c7]'
+                       : isDragon
+                       ? 'bg-[#7f1d1d]/60 text-[#fcd34d]'
+                       : isFF
+                       ? 'bg-[#406da3]/60 text-[#dfc894]'
+                       : 'bg-[#45413e]/70 text-[#fffff0]'
+                   }`}>
+                       <span className="text-xl group-hover:scale-110 transition-transform emoji">{emoji}</span>
+                     </div>
+                     <div className="flex flex-col min-w-0 flex-1 justify-center">
+                        <span className="text-xs font-bold uppercase tracking-wider">{title}</span>
+                        <span className="text-[8.5px] opacity-60 font-mono mt-0.5 leading-snug line-clamp-1">{hint}</span>
+                     </div>
+                   </button>
+                 ))}
+                 {!isPlayerMode && (<>
                  {/* 1. Add books button */}
                  <button 
                    onClick={() => bookInputRef.current?.click()}
@@ -957,6 +1020,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                      </div>
                    </button>
                  )}
+                 </>)}
                  {/* 4. Lite version in Telegram: an icon on the phone's home screen */}
                  {(homeScreen === 'missed' || homeScreen === 'unknown') && (
                    <button 
@@ -1011,6 +1075,20 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
                 if (files && files.length > 0) {
                    if (onExternalFilePicked) onExternalFilePicked(files);
                 }
+                e.target.value = '';
+              }}
+            />
+
+            {/* Hidden File Input for Add Tape / Add Album */}
+            <input
+              type="file"
+              ref={audioInputRef}
+              className="hidden"
+              multiple
+              accept={Capacitor.isNativePlatform() ? undefined : ".mp3,.m4b,.m4a,.mp4,audio/*,.jpg,.jpeg,.png,.webp,image/*"}
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0 && onExternalFilePicked) onExternalFilePicked(files);
                 e.target.value = '';
               }}
             />
