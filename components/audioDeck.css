@@ -1,7 +1,8 @@
 /* Player mode ("Tape"): a cassette deck or a record coming out of its sleeve, and a strip of the
    other books in the collection underneath. Colours come from the --dk-* custom properties set
    for the current style (utils/deckArt.ts, DECK_VARS), so every style repaints it. */
-.dk{position:relative;width:100%;max-width:440px;margin:0 auto;color:var(--text);font-family:var(--ui);-webkit-tap-highlight-color:transparent}
+/* centred in the free space, but never closer than the screen's top padding to the header */
+.dk{position:relative;width:100%;max-width:440px;margin:auto;color:var(--text);font-family:var(--ui);-webkit-tap-highlight-color:transparent}
 .dk button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 .dk button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
 

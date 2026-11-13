@@ -1293,7 +1293,7 @@ function App() {
           ) : (
             mode === 'audio' && deckKind ? (
                 // Player mode: the cassette deck or the record, with the rest of the collection under it
-                <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-24 pb-6 flex flex-col justify-center">
+                <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-[124px] pb-6 flex flex-col">
                     <AudioDeck
                         book={currentBook}
                         others={activeBooks.filter(b => b.id !== currentBook.id && !b.missing && b.type === 'audio' && deckKindOf(b.id) === deckKind)}
