@@ -29,6 +29,7 @@ const dropFileOffsetsForMultiFileAudio = (book: any): any[] => {
 const loadMusicMetadata = () => import('music-metadata');
 const loadArchive = () => import('../utils/archive');
 import { parseFb2, parseEpub, extractFb2Metadata, extractEpubMetadata } from '../utils/ebook';
+import { isInCollection, savedPlayerMode } from '../utils/playerMode';
 
 interface UseLibraryProps {
     isNative: boolean;
@@ -1108,7 +1109,10 @@ export function useLibrary({
       setBooks(prev => prev.filter(b => b.id !== bookId && (!targetTitle || b.title !== targetTitle)));
   };
 
-  const restoreLastActiveBook = async (loadedBooks: Book[]) => {
+  const restoreLastActiveBook = async (allBooks: Book[]) => {
+     // Only books of the side the app was left on: the library in the reader, tapes and albums in the player
+     const playerSide = savedPlayerMode();
+     const loadedBooks = allBooks.filter(b => isInCollection(b) === playerSide);
      let historyMap: Record<string, PersistedState> = {};
      try {
         const val = isNative ? (await Preferences.get({ key: 'cool_read_history' })).value : localStorage.getItem('cool_read_history');
@@ -1129,6 +1133,13 @@ export function useLibrary({
        let maxTime = 0;
        (Object.values(historyMap) as PersistedState[]).forEach(s => {
            if (s.lastUpdated > maxTime) { maxTime = s.lastUpdated; targetId = s.bookId; }
+       });
+     }
+     // the last book was on the other side: take the latest one read or heard on this side
+     if (targetId && !loadedBooks.some(b => b.id === targetId || (b.title && b.title.toLowerCase() === String(targetId).toLowerCase()))) {
+       let maxTime = 0; targetId = null;
+       (Object.values(historyMap) as PersistedState[]).forEach(s => {
+           if (s.lastUpdated > maxTime && loadedBooks.some(b => b.id === s.bookId)) { maxTime = s.lastUpdated; targetId = s.bookId; }
        });
      }
 
