@@ -1299,7 +1299,7 @@ function App() {
           ) : (
             mode === 'audio' && deckKind ? (
                 // Player mode: the cassette deck or the record, with the rest of the collection under it
-                <div className={`flex-1 w-full min-h-0 overflow-hidden ${deckKind === 'tape' ? 'px-2 pt-20 pb-0' : 'px-4 pt-[124px] pb-6'} flex flex-col`}
+                <div className={`flex-1 w-full min-h-0 overflow-hidden ${deckKind === 'tape' ? 'px-0 pt-20 pb-0' : 'px-4 pt-[124px] pb-6'} flex flex-col`}
                      style={coverTint ? { background: tintBackground(coverTint), transition: 'background .6s' } : undefined}>
                     <AudioDeck
                         book={currentBook}

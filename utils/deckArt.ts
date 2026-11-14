@@ -28,12 +28,22 @@ export const DECK_VARS: Record<DeckKey, Record<string, string>> = {
   Jazz: { '--bg':'#0b0b0a','--line':'#3b3220','--card':'#151411','--text':'#f1dfae','--muted':'#a8894c','--accent':'#a8894c','--on-accent':'#0b0b0a','--track':'#211d15','--door':'#13120f','--door-ink':'#d4b46a','--deck1':'#1d1a12','--deck2':'#080807','--key1':'#2a2519','--key2':'#13120f','--key-shadow':'#000','--key-text':'#f1dfae','--key-on1':'#d4b46a','--key-on2':'#a8894c','--key-on-text':'#0b0b0a','--shell1':'#1a1814','--shell2':'#080807','--window':'#050504','--label':'#f1dfae','--ink':'#0b0b0a','--label-font':"'Poiret One',serif",'--label-size':'6cqw','--tape':'#3d2c1c','--hub':'#d4b46a','--ui':"'Literata',Georgia,serif",'--shell-fx':'repeating-linear-gradient(90deg,transparent 0 3cqw,rgba(212,180,106,.08) 3cqw 3.3cqw)' },
 };
 
+/** Canvas art is drawn at this many pixels per unit of its layout, to stay sharp on dense screens */
+export const ART_SCALE = 3;
+/** WebP keeps big canvases small (with transparency); PNG / JPEG where the WebView cannot write WebP */
+export function toImage(c: HTMLCanvasElement, alpha: boolean): string {
+  const webp = c.toDataURL('image/webp', 0.9);
+  if (webp.startsWith('data:image/webp')) return webp;
+  return alpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9);
+}
+
 /* Deck lids: one drawing per style, with a see-through window over the reels (cut = true).
    The same drawing without the window is the flap of the cassette boxes. */
 // eslint-disable-next-line
 function drawLidCanvas(name: string, H = 400, cut = true): string {
-  const W = 600, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d')!;
+  // drawn in a 600-wide space and rendered at ART_SCALE, sharp on phone screens (3 device px per CSS px)
+  const W = 600, K = ART_SCALE, c = document.createElement('canvas'); c.width = W * K; c.height = H * K;
+  const g = c.getContext('2d')!; g.scale(K, K);
   let seed = name.length * 977 + name.charCodeAt(0) * 31; const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const rr = (x, y, w, h, rad) => { g.beginPath(); g.moveTo(x + rad, y); g.arcTo(x + w, y, x + w, y + h, rad); g.arcTo(x + w, y + h, x, y + h, rad); g.arcTo(x, y + h, x, y, rad); g.arcTo(x, y, x + w, y, rad); g.closePath(); };
   const lin = (y0, y1, stops) => { const lg = g.createLinearGradient(0, y0, 0, y1); stops.forEach((s, i) => lg.addColorStop(i / (stops.length - 1), s)); return lg; };
@@ -146,10 +156,10 @@ function drawLidCanvas(name: string, H = 400, cut = true): string {
     g.fillStyle = ink; g.globalAlpha = .55; rr(W / 2 - 42, H - 38, 84, 9, 4.5); g.fill(); g.globalAlpha = 1;
   }
   // grain, same as on the covers
-  const d = g.getImageData(0, 0, W, H), px = d.data;
+  const d = g.getImageData(0, 0, W * K, H * K), px = d.data;
   for (let i = 0; i < px.length; i += 4) { if (!px[i + 3]) continue; const n = (r() - .5) * 18; px[i] += n; px[i + 1] += n; px[i + 2] += n; }
   g.putImageData(d, 0, 0);
-  return c.toDataURL('image/png');
+  return toImage(c, true);
 }
 
 
@@ -163,7 +173,7 @@ export const flapArt = (key: DeckKey) => memo('flap:' + key, () => drawLidCanvas
    The same title always gives the same picture. */
 export function generatedCover(title: string, author = ''): string {
   return memo('cover:' + title + '|' + author, () => {
-    const S = 480, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d')!;
+    const S = 480, K = 1080 / S, c = document.createElement('canvas'); c.width = c.height = S * K; const g = c.getContext('2d')!; g.scale(K, K);
     let a = 7; for (const ch of title + author) a = (a * 31 + ch.charCodeAt(0)) % 2147483647; a = a || 7;
     const r = () => { a = (a * 16807) % 2147483647; return a / 2147483647; };
     const hue = r() * 360, hsl = (h: number, s: number, l: number) => `hsl(${(h + 360) % 360},${s}%,${l}%)`;
@@ -175,7 +185,7 @@ export function generatedCover(title: string, author = ''): string {
     g.fillStyle = fig[4]; g.beginPath(); g.ellipse(S * (.45 + r() * .25), S * .62, S * .2, S * .34, r() - .5, 0, Math.PI * 2); g.fill();
     g.fillStyle = fig[1]; g.beginPath(); g.ellipse(S * (.3 + r() * .15), S * .7, S * .16, S * .3, r() - .3, 0, Math.PI * 2); g.fill();
     g.fillStyle = fig[0]; g.beginPath(); g.arc(S * (.2 + r() * .6), S * .22, S * .08, 0, Math.PI * 2); g.fill();
-    const d = g.getImageData(0, 0, S, S); for (let i = 0; i < d.data.length; i += 4) { const n = (r() - .5) * 30; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } g.putImageData(d, 0, 0);
+    const d = g.getImageData(0, 0, S * K, S * K); for (let i = 0; i < d.data.length; i += 4) { const n = (r() - .5) * 30; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } g.putImageData(d, 0, 0);
     g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, S * .74, S, S * .26);
     g.fillStyle = '#f6ecd6'; g.textAlign = 'center'; g.font = '700 34px Literata, Georgia, serif';
     // up to two lines of the title, cut with an ellipsis when longer
@@ -185,6 +195,6 @@ export function generatedCover(title: string, author = ''): string {
     if (cur) lines.push(cur);
     if (lines.length > 2) { lines.length = 2; lines[1] += '…'; }
     lines.forEach((ln, k) => { let t = ln; while (g.measureText(t).width > S * .9 && t.length > 2) t = t.slice(0, -2) + '…'; g.fillText(t, S / 2, S * (lines.length > 1 ? .84 + k * .08 : .88)); });
-    return c.toDataURL('image/jpeg', .86);
+    return toImage(c, false);
   });
 }

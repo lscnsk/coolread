@@ -24,21 +24,27 @@
 .dk-tape{position:relative}
 .dk-upright{cursor:pointer}
 /* the shelf lies over the deck's bay: the cassettes stand upright as in the deck and scroll sideways */
-.dk-shelf{position:absolute;z-index:5;top:0;bottom:98px;left:50%;width:100vw;margin-left:-50vw;display:flex;align-items:center;gap:16px;overflow-x:auto;overflow-y:hidden;
+.dk-shelf{position:absolute;z-index:5;top:0;bottom:112px;left:50%;width:100vw;margin-left:-50vw;display:flex;align-items:center;gap:16px;overflow-x:auto;overflow-y:hidden;
   scroll-snap-type:x mandatory;padding:0 calc(50vw - min(29vw,115px));scrollbar-width:none;overscroll-behavior-x:contain}
 .dk-shelf::-webkit-scrollbar{display:none}
 .dk .dk-shelf-tape{flex:0 0 min(58vw,230px);scroll-snap-align:center;filter:drop-shadow(0 10px 14px rgba(0,0,0,.45))}
 .dk-up-tape{position:relative;width:100%;aspect-ratio:63/100;container-type:inline-size}
 .dk-up-inner{position:absolute;left:50%;top:50%;width:calc(100cqw * 100 / 63);transform:translate(-50%,-50%) rotate(90deg)}
-.dk-vertical{max-width:min(100%,calc((100dvh - 230px) * .7));margin:0 auto}
+/* the tape deck fills the screen under the header, edge to edge: the upright bay (2:3) is as large as
+   the space allows and the deck's own surface fills the rest, with the keys along the bottom */
+.dk.dk-full{max-width:none;margin:0;flex:1;min-height:0;display:flex;flex-direction:column}
+.dk-full .dk-tape{flex:1;min-height:0;display:flex;flex-direction:column}
+.dk-vertical{flex:1;min-height:0;display:flex;flex-direction:column;border-radius:0;padding:14px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+.dk-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;container-type:size}
+.dk-stage > .dk-upright{width:min(100cqw,100cqh * 2 / 3);flex:none}
 /* upright deck: the landscape bay is turned a quarter inside a 2:3 frame */
 .dk-upright{position:relative;width:100%;aspect-ratio:2/3;container-type:inline-size}
 .dk-upright > .dk-bay{position:absolute;left:50%;top:50%;width:150cqw;transform:translate(-50%,-50%) rotate(90deg)}
 
 /* keys: a row of piano keys coming out of a recessed slot; a pressed key sinks and shows less of its front */
-.dk-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:14px;padding:6px 6px 0;height:70px;overflow:hidden;border-radius:10px 10px 4px 4px;
+.dk-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;padding:7px 7px 0;height:84px;flex:none;overflow:hidden;border-radius:10px 10px 4px 4px;
   background:color-mix(in oklab,var(--deck2) 65%,#000);box-shadow:inset 0 4px 9px rgba(0,0,0,.6),inset 0 0 0 1px rgba(0,0,0,.3)}
-.dk .dk-key{position:relative;height:72px;border-radius:5px 5px 2px 2px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;padding-top:15px;color:var(--key-text);
+.dk .dk-key{position:relative;height:86px;border-radius:5px 5px 2px 2px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;padding-top:20px;color:var(--key-text);
   background:linear-gradient(180deg,color-mix(in oklab,var(--key1) 60%,#fff) 0,color-mix(in oklab,var(--key1) 82%,#fff) 10%,color-mix(in oklab,var(--key1) 90%,#fff) 45%,var(--key1) 100%);
   box-shadow:inset 0 -14px 0 color-mix(in oklab,var(--key2) 80%,#000),inset 0 1px 0 rgba(255,255,255,.35),inset 1px 0 0 rgba(255,255,255,.08),inset -1px 0 0 rgba(0,0,0,.25);
   transition:transform .07s ease-out,box-shadow .07s ease-out;touch-action:none;user-select:none;-webkit-user-select:none}
