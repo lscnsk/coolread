@@ -293,7 +293,7 @@ export function AudioDeck(props: AudioDeckProps) {
   const tracks = book.chapters.length;
 
   return (
-    <div className="dk" style={vars}>
+    <div className={`dk${kind === 'tape' ? ' dk-full' : ''}`} style={vars}>
       {kind === 'tape' ? (
         <div className={`dk-tape${shelf ? ' shelf' : ''}`} ref={shelfRef}>
         {/* The shelf over the deck: the cassette taken out, among the rest of the collection */}
@@ -318,6 +318,7 @@ export function AudioDeck(props: AudioDeckProps) {
         </AnimatePresence>
         <div className="dk-deck dk-vertical">
           {/* The deck stands upright: the bay is drawn landscape and turned a quarter */}
+          <div className="dk-stage">
           <div className="dk-upright" onClick={tapDeck} role="button" aria-label={shelf ? 'Вставить кассету обратно' : 'Открыть крышку и достать кассету'}>
           <div className={`dk-bay ${bay === 'in' ? '' : bay}${doorOpen ? ' open' : ''}`}>
             <div className="dk-slot">
@@ -327,6 +328,7 @@ export function AudioDeck(props: AudioDeckProps) {
               <div className="dk-door-face" style={bg(skin || lidArt(deckKey))} />
               <div className="dk-door-glass" /><div className="dk-door-sheen" />
             </div>
+          </div>
           </div>
           </div>
           <div className="dk-keys">

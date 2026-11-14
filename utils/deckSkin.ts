@@ -9,7 +9,7 @@ import { DeckKey, lidArt } from './deckArt';
 const ACTIVE = 'cool_read_deck_skin_on';
 const EVENT = 'coolread-deck-skin';
 // The door is drawn landscape (3:2) and turned a quarter in the upright deck
-const LW = 900, LH = 600;
+const LW = 1800, LH = 1200;
 // its window, as a share of the landscape door (see drawLidCanvas in deckArt.ts)
 const WIN = { x: 60 / 600, y: 48 / 400, w: 480 / 600, h: 188 / 400 };
 
@@ -84,10 +84,10 @@ const loadImage = (src: string) => new Promise<HTMLImageElement>((ok, fail) => {
   const i = new Image(); i.onload = () => ok(i); i.onerror = () => fail(new Error('This picture cannot be read, try png or jpg')); i.src = src;
 });
 
-/** The template: the door of the current style as the user sees it, upright, 800 × 1200 PNG */
+/** The template: the door of the current style as the user sees it, upright, 1200 × 1800 PNG */
 export async function deckSkinTemplate(key: DeckKey): Promise<string> {
   const lid = await loadImage(lidArt(key));
-  const W = 800, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const W = 1200, H = 1800, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d')!;
   // landscape (x, y) appears upright at (1 − y, x)
   g.translate(W, 0); g.rotate(Math.PI / 2); g.drawImage(lid, 0, 0, H, W);
@@ -112,7 +112,7 @@ export async function uploadDeckSkin(file: File): Promise<void> {
     g.setTransform(1, 0, 0, 1, 0, 0);
     // the window stays clear, so the tape shows through whatever is painted
     g.globalCompositeOperation = 'destination-out';
-    const x = WIN.x * LW, y = WIN.y * LH, w = WIN.w * LW, h = WIN.h * LH, r = 21;
+    const x = WIN.x * LW, y = WIN.y * LH, w = WIN.w * LW, h = WIN.h * LH, r = 42;
     g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fill();
     const blob = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/webp', 0.9))
       .then(b => b && b.type === 'image/webp' ? b : new Promise<Blob | null>(ok => c.toBlob(ok, 'image/png')));
