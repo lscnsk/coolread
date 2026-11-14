@@ -380,7 +380,7 @@ export function AudioDeck(props: AudioDeckProps) {
             <button type="button" onClick={() => onSeek(currentTime + 15)} aria-label="Вперёд на 15 секунд" style={{ transform: 'scaleX(-1)' }}>{ICON.back}</button>
             <button type="button" onClick={props.onNextChapter} disabled={props.chapterIndex >= tracks - 1} aria-label="Следующий трек">{ICON.next}</button>
           </div>
-          <Drum names={book.chapters.map(c => (c.name || '').replace(/\.[^/.]+$/, ''))} current={props.chapterIndex}
+          <Drum names={book.chapters.map(c => (c.name || '').replace(/\.(mp3|m4a|m4b|mp4|aac|ogg|opus|flac|wav)$/i, ''))} current={props.chapterIndex}
             onPick={i => { props.onSelectChapter(i); if (!slid) setSlid(true); setTimeout(() => setIsPlaying(true), slid ? 0 : 850); }} />
         </>
       )}
