@@ -54,8 +54,7 @@ const packs = (p: number) => [Math.sqrt(RMIN * RMIN + (1 - p) * (RMAX * RMAX - R
 /** Bay states: in the deck, pushed half out (ejected), or gone (between books) */
 type Bay = 'in' | 'out' | 'away';
 
-// The record's track drum: two tracks above and below the playing one, which is larger and has its number
-// between two rails; the list rolls to keep it in place, with empty rows before the first and after the last track
+// The record's track drum: two tracks above and below the playing one, which is larger; the list rolls to keep it in place, with empty rows before the first and after the last track
 const ROW = 30, CUR = 44;
 function Drum({ names, current, onPick }: { names: string[]; current: number; onPick: (i: number) => void }) {
   // Always room for two rows above and below, so the drum keeps its size and place on every track
@@ -67,8 +66,8 @@ function Drum({ names, current, onPick }: { names: string[]; current: number; on
         {names.map((n, k) => (
           <li key={k}>
             {k === current
-              ? <button type="button" className="on" aria-current="true" onClick={() => onPick(k)}><span className="num">{k + 1}.</span><span className="nm">{n}</span></button>
-              : <button type="button" onClick={() => onPick(k)}><span className="nm">– {k + 1}. {n}</span></button>}
+              ? <button type="button" className="on" aria-current="true" onClick={() => onPick(k)}><span className="nm">{n}</span></button>
+              : <button type="button" onClick={() => onPick(k)}><span className="nm">{n}</span></button>}
           </li>
         ))}
       </ol>
@@ -380,7 +379,7 @@ export function AudioDeck(props: AudioDeckProps) {
             <button type="button" onClick={() => onSeek(currentTime + 15)} aria-label="Вперёд на 15 секунд" style={{ transform: 'scaleX(-1)' }}>{ICON.back}</button>
             <button type="button" onClick={props.onNextChapter} disabled={props.chapterIndex >= tracks - 1} aria-label="Следующий трек">{ICON.next}</button>
           </div>
-          <Drum names={book.chapters.map(c => (c.name || '').replace(/\.[^/.]+$/, ''))} current={props.chapterIndex}
+          <Drum names={book.chapters.map(c => (c.name || '').replace(/\.(mp3|m4a|m4b|mp4|aac|ogg|opus|flac|wav)$/i, ''))} current={props.chapterIndex}
             onPick={i => { props.onSelectChapter(i); if (!slid) setSlid(true); setTimeout(() => setIsPlaying(true), slid ? 0 : 850); }} />
         </>
       )}
